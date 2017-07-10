@@ -1,0 +1,970 @@
+From 1196aa011c12fe547f6b20bbdbc93f9aa058a819 Mon Sep 17 00:00:00 2001
+From: Li DongQiang <david.li@rock-chips.com>
+Date: Mon, 10 Jul 2017 15:15:48 +0800
+Subject: [PATCH] ASoC: update driver for codec es8396
+
+Description:
+1. due to headset calibration pop noise can't be fixed,
+   lineout will override the headset and need HW change together
+2. fix pop noise during bt client call
+
+Change-Id: Ic684fe205b91e54091f3299b1b0ed6e12354bcf7
+Signed-off-by: Li DongQiang <david.li@rock-chips.com>
+---
+ arch/arm/boot/dts/px3se-sdk.dtsi |   3 +-
+ sound/soc/codecs/es8396.c        | 632 ++++++++++++++++++---------------------
+ 2 files changed, 301 insertions(+), 334 deletions(-)
+ mode change 100644 => 100755 sound/soc/codecs/es8396.c
+
+diff --git a/arch/arm/boot/dts/px3se-sdk.dtsi b/arch/arm/boot/dts/px3se-sdk.dtsi
+index c06e398..6364e0d 100644
+--- a/arch/arm/boot/dts/px3se-sdk.dtsi
++++ b/arch/arm/boot/dts/px3se-sdk.dtsi
+@@ -270,7 +270,8 @@
+ 	es8396: es8396@10 {
+ 		compatible = "es8396";
+ 		reg = <0x11>;
+-		spk-con-gpio = <&gpio3 GPIO_C4 GPIO_ACTIVE_HIGH>;
++		spk-con-gpio = <&gpio0 GPIO_D6 GPIO_ACTIVE_HIGH>;
++		lineout-con-gpio = <&gpio3 GPIO_C4 GPIO_ACTIVE_HIGH>;
+ 		clocks = <&clk_i2s_2ch_out>;
+ 		clock-names = "mclk";
+ 		status = "okay";
+diff --git a/sound/soc/codecs/es8396.c b/sound/soc/codecs/es8396.c
+old mode 100644
+new mode 100755
+index 05af76d..410c36d
+--- a/sound/soc/codecs/es8396.c
++++ b/sound/soc/codecs/es8396.c
+@@ -226,6 +226,8 @@ struct es8396_private {
+ 	int pon_delay;
+ 	int spk_ctl_gpio;
+ 	bool spk_gpio_level;
++	int lineout_ctl_gpio;
++	bool lineout_gpio_level;
+ 
+ 	bool calibrate;
+ 	u8 output_device_selected;
+@@ -359,7 +361,7 @@ static void voice_shutdown_depop_events(struct work_struct *work)
+ 		snd_soc_write(tron_codec, 0x1A, 0x00);
+ 		snd_soc_write(tron_codec, 0x67, 0x00);
+ 		snd_soc_write(tron_codec, 0x69, 0x00);
+-		snd_soc_write(tron_codec, 0x66, 0x02);
++		snd_soc_write(tron_codec, 0x66, 0x00);
+ 	}
+ 	mutex_unlock(&es8396->voice_shutdown_depop_mlock);
+ }
+@@ -367,108 +369,34 @@ static void voice_shutdown_depop_events(struct work_struct *work)
+ static void init_cali_work_events(struct work_struct *work)
+ {
+ 	struct es8396_private *es8396 = snd_soc_codec_get_drvdata(tron_codec);
+-	unsigned int value;
+ 
+ 	mutex_lock(&es8396->init_cali_mlock);
+ 	pr_debug("init_cali_work_events\n");
+ 	if ((es8396->pcm_pop_work_retry) > 0) {
+ 		es8396->pcm_pop_work_retry--;
+ 		pr_debug("Enter into %s  %d\n", __func__, __LINE__);
+-		snd_soc_write(tron_codec, ES8396_DAC_OFFSET_CALI_REG6F, 0x86);
+-		snd_soc_write(tron_codec, ES8396_DAC_OFFSET_CALI_REG6F, 0x06);
+-		schedule_delayed_work(&es8396->init_cali_work,
+-				      msecs_to_jiffies(100));
+-	} else {
+-		snd_soc_write(tron_codec, ES8396_DAC_CSM_REG66, 0x00);
+-		snd_soc_write(tron_codec, ES8396_ADC_ANALOG_CTRL_REG5E, 0x00);
+-
+-		snd_soc_write(tron_codec, 0x1f, 0x00);
+-		snd_soc_write(tron_codec, 0x20, 0x40);
+-
+-		if (es8396_valid_micbias(es8396->mic_bias_lvl) == false) {
+-			pr_err("MIC BIAS Level error.\n");
+-		} else {
+-			value = es8396->mic_bias_lvl;
+-			value &= 0x07;
+-			value = (value << 4) | 0x08;
+-			/* enable micbias1 */
+-			snd_soc_write(tron_codec,
+-				      ES8396_SYS_MICBIAS_CTRL_REG74,
+-				      value);
++		snd_soc_write(tron_codec, ES8396_DAC_OFFSET_CALI_REG6F, 0x83);
++		if (es8396->pcm_pop_work_retry) {
++			schedule_delayed_work(&es8396->init_cali_work,
++					      msecs_to_jiffies(100));
+ 		}
++	}
++	snd_soc_write(tron_codec, ES8396_ADC_ANALOG_CTRL_REG5E, 0x3C);
+ 
+-		snd_soc_write(tron_codec, ES8396_ADC_CSM_REG53, 0x00);
+-		snd_soc_write(tron_codec, ES8396_ADC_PGA_GAIN_REG61, 0x33);
+-		snd_soc_write(tron_codec, ES8396_ADC_MICBOOST_REG60, 0x22);
+-		if (es8396->dmic_amic == MIC_AMIC)
+-			/* use analog mic */
+-			snd_soc_write(tron_codec,
+-				      ES8396_ADC_DMIC_RAMPRATE_REG54,
+-				      0x00);
+-		else
+-			/* use digital mic */
+-			snd_soc_write(tron_codec,
+-				      ES8396_ADC_DMIC_RAMPRATE_REG54,
+-				      0xf0);
+-
+-		/* Enable HPF, LDATA= LADC, RDATA = LADC */
+-		snd_soc_write(tron_codec, ES8396_ADC_HPF_COMP_DASEL_REG55,
+-			      0x31);
+-
+-		/*
+-		 * setup hp detection
+-		 */
+-
+-		/* gpio 2 for irq, AINL as irq src, gpio1 for dmic clk */
+-		snd_soc_write(tron_codec, ES8396_ALRCK_GPIO_SEL_REG15, 0xfa);
+-		snd_soc_write(tron_codec, ES8396_DAC_JACK_DET_COMP_REG69, 0x00);
+-		if (es8396->jackdet_enable == 1) {
+-			/* jack detection from AINL pin, AINL=0, HP Insert */
+-			snd_soc_write(tron_codec,
+-				      ES8396_DAC_JACK_DET_COMP_REG69,
+-				      0x04);
+-			if (es8396->gpio_int_pol == 0)
+-				/* if HP insert, GPIO2=Low */
+-				snd_soc_write(tron_codec, ES8396_GPIO_IRQ_REG16,
+-					      0x80);
+-			else
+-				/* if HP insert, GPIO2=High */
+-				snd_soc_write(tron_codec, ES8396_GPIO_IRQ_REG16,
+-					      0xc0);
+-		} else {
+-			snd_soc_write(tron_codec, ES8396_GPIO_IRQ_REG16, 0x00);
+-		}
+-
+-		/*
+-		 * setup mono in in differential mode or stereo mode
+-		 */
+-
+-		/* monoin in differential mode */
+-		if (es8396->monoin_differential == 1)
+-			snd_soc_update_bits(tron_codec,
+-					    ES8396_MN_MIXER_REF_LP_REG39,
+-					    0x08, 0x08);
+-		else
+-			snd_soc_update_bits(tron_codec,
+-					    ES8396_MN_MIXER_REF_LP_REG39,
+-					    0x08, 0x00);
+-
+-		snd_soc_write(tron_codec, ES8396_DAC_JACK_DET_COMP_REG69, 0x00);
+-		snd_soc_write(tron_codec, ES8396_BCLK_DIV_M1_REG0E, 0x24);
+-		snd_soc_write(tron_codec, ES8396_LRCK_DIV_M3_REG10, 0x22);
+-		snd_soc_write(tron_codec, ES8396_SDP_2_MS_REG13, 0x00);
++	/* use line  out */
++	msleep(100);
++	snd_soc_write(tron_codec, 0x4E, 0x80);
++	snd_soc_write(tron_codec, 0x4F, 0x81);
++	snd_soc_write(tron_codec, 0x4A, 0x60);
++	snd_soc_write(tron_codec, 0x4B, 0x60);
+ 
+-		es8396_set_bias_level(tron_codec, SND_SOC_BIAS_STANDBY);
+-		snd_soc_write(tron_codec, ES8396_ADC_ANALOG_CTRL_REG5E, 0x3C);
+-		snd_soc_write(tron_codec, 0x6C, 0x96);
+-	}
+ 	mutex_unlock(&es8396->init_cali_mlock);
+ }
+ 
+ static void voice_pop_work_events(struct work_struct *work)
+ {
+ 	struct es8396_private *es8396 = snd_soc_codec_get_drvdata(tron_codec);
+-
++	int i;
+ 	mutex_lock(&es8396->voice_depop_mlock);
+ 	pr_debug("voice_pop_work_events\n");
+ 	/*
+@@ -481,29 +409,44 @@ static void voice_pop_work_events(struct work_struct *work)
+ 			    0x3F, 0x13);
+ 	snd_soc_update_bits(tron_codec, ES8396_SDP2_OUT_FMT_REG23,
+ 			    0x7F, 0x33);
++	/* use line out */
++	snd_soc_write(tron_codec, 0x4E, 0x80);
++	snd_soc_write(tron_codec, 0x4F, 0x81);
++	snd_soc_write(tron_codec, 0x4A, 0x60);
++	snd_soc_write(tron_codec, 0x4B, 0x60);
++	snd_soc_write(tron_codec, 0x1A, 0x40);	/* Enable HPOUT */
++
+ 	/* unmute dac */
+-	snd_soc_write(tron_codec, 0x66, 0x02);
++	snd_soc_write(tron_codec, 0x66, 0x00);
++
++	for (i = 0; i < 120; i = i + 2) {
++		snd_soc_write(tron_codec, 0x6A, 120 - i);
++		snd_soc_write(tron_codec, 0x6B, 120 - i);
++		usleep_range(100, 200);
++	}
++
+ 	mutex_unlock(&es8396->voice_depop_mlock);
+ }
+ 
+ static void pcm_pop_work_events(struct work_struct *work)
+ {
+ 	struct es8396_private *es8396 = snd_soc_codec_get_drvdata(tron_codec);
+-
++	int i;
+ 	mutex_lock(&es8396->pcm_depop_mlock);
+ 	pr_debug("pcm_pop_work_events\n");
+ 
+-	if ((es8396->pcm_pop_work_retry) > 0) {
+-		es8396->pcm_pop_work_retry--;
+-		snd_soc_write(tron_codec, ES8396_DAC_OFFSET_CALI_REG6F, 0x86);
+-		snd_soc_write(tron_codec, ES8396_DAC_OFFSET_CALI_REG6F, 0x06);
+-		schedule_delayed_work(&es8396->pcm_pop_work,
+-				      msecs_to_jiffies(20));
+-	} else {
+-		es8396->calibrate = true;
+-		snd_soc_update_bits(tron_codec, ES8396_DAC_CSM_REG66,
+-				    0x03, 0x02);
+-		snd_soc_write(tron_codec, ES8396_CPHP_ENABLE_REG40, 0x66);
++	/* use line out */
++	snd_soc_write(tron_codec, 0x4E, 0x80);
++	snd_soc_write(tron_codec, 0x4F, 0x81);
++	snd_soc_write(tron_codec, 0x4A, 0x60);
++	snd_soc_write(tron_codec, 0x4B, 0x60);
++	snd_soc_update_bits(tron_codec, ES8396_DAC_CSM_REG66,
++			    0x03, 0x00);
++
++	for (i = 0; i < 120; i = i + 2) {
++		snd_soc_write(tron_codec, 0x6A, 120 - i);
++		snd_soc_write(tron_codec, 0x6B, 120 - i);
++		usleep_range(100, 200);
+ 	}
+ 	mutex_unlock(&es8396->pcm_depop_mlock);
+ }
+@@ -532,7 +475,7 @@ static int classd_event(struct snd_soc_dapm_widget *w,
+ 		snd_soc_update_bits(w->codec, ES8396_DAC_CSM_REG66, 0xFE, 0x00);
+ 		/* dac analog power on */
+ 		snd_soc_update_bits(w->codec, ES8396_DAC_REF_PWR_CTRL_REG6E,
+-				    0xff, 0x00);
++				    0xff, 0x34);
+ 
+ 		regv2 = snd_soc_read(w->codec, ES8396_SPK_CTRL_1_REG3C);
+ 		/* set speaker ldo level */
+@@ -754,33 +697,6 @@ static int hpamp_event(struct snd_soc_dapm_widget *w,
+ 	case SND_SOC_DAPM_PRE_PMU:
+ 		pr_debug("Enter into %s  %d, event = SND_SOC_DAPM_PRE_PMU\n",
+ 			 __func__, __LINE__);
+-		/* power up headphone driver */
+-		/* read the clock configure */
+-		regv = snd_soc_read(w->codec, ES8396_CLK_CTRL_REG08);
+-		regv &= 0xdf;
+-		/* enable charge pump clock */
+-		snd_soc_write(w->codec, ES8396_CLK_CTRL_REG08, regv);
+-		/* dac csm startup, dac digital still stop */
+-		snd_soc_update_bits(w->codec, ES8396_DAC_CSM_REG66, 0xff, 0x00);
+-		/* dac analog power down */
+-		snd_soc_update_bits(w->codec, ES8396_DAC_REF_PWR_CTRL_REG6E,
+-				    0xff, 0x00);
+-
+-		regv = snd_soc_read(w->codec, ES8396_HP_MIXER_BOOST_REG2B);
+-		regv &= 0xcc;
+-		snd_soc_write(w->codec, ES8396_HP_MIXER_BOOST_REG2B, regv);
+-
+-		regv = snd_soc_read(w->codec, ES8396_CPHP_CTRL_3_REG44);
+-		regv &= 0xcc;
+-		snd_soc_write(w->codec, ES8396_CPHP_CTRL_3_REG44, regv);
+-
+-		regv = snd_soc_read(w->codec, ES8396_CPHP_CTRL_1_REG42);
+-		regv &= 0xdf;
+-		snd_soc_write(w->codec, ES8396_CPHP_CTRL_1_REG42, regv);
+-
+-		regv = snd_soc_read(w->codec, ES8396_CPHP_CTRL_2_REG43);
+-		regv &= 0x7f;
+-		snd_soc_write(w->codec, ES8396_CPHP_CTRL_2_REG43, regv);
+ 		es8396->output_device_selected = 1;
+ 		break;
+ 	case SND_SOC_DAPM_POST_PMU:
+@@ -973,7 +889,7 @@ static const struct snd_kcontrol_new es8396_speaker_rmixer_controls[] = {
+  * Only used line out1 p mixer for differential output
+  */
+ static const struct snd_kcontrol_new es8396_lout1_mixer_controls[] = {
+-	SOC_DAPM_SINGLE("LDAC2LO1MIXP Switch", ES8396_LNOUT_LO1EN_LO1MIX_REG4A,
++	SOC_DAPM_SINGLE("LDAC2LO1MIXP Switch", SND_SOC_NOPM,
+ 			5, 1, 0),
+ 	SOC_DAPM_SINGLE("LAXMIX2LO1MIXP Switch",
+ 			ES8396_LNOUT_LO1EN_LO1MIX_REG4A, 4, 1, 0),
+@@ -986,7 +902,7 @@ static const struct snd_kcontrol_new es8396_lout1_mixer_controls[] = {
+ };
+ 
+ static const struct snd_kcontrol_new es8396_rout1_mixer_controls[] = {
+-	SOC_DAPM_SINGLE("RDAC2RO1MIXN Switch", ES8396_LNOUT_RO1EN_RO1MIX_REG4B,
++	SOC_DAPM_SINGLE("RDAC2RO1MIXN Switch", SND_SOC_NOPM,
+ 			5, 1, 0),
+ 	SOC_DAPM_SINGLE("RAXMIX2RO1MIXN Switch",
+ 			ES8396_LNOUT_RO1EN_RO1MIX_REG4B, 4, 1, 0),
+@@ -1598,12 +1514,12 @@ static const struct snd_soc_dapm_widget es8396_dapm_widgets[] = {
+ 	SND_SOC_DAPM_MIXER("LOUT1 Mix", SND_SOC_NOPM, 0, 0,
+ 			   &es8396_lout1_mixer_controls[0],
+ 			   ARRAY_SIZE(es8396_lout1_mixer_controls)),
+-	SND_SOC_DAPM_PGA("LNOUTMIX1 PGA", ES8396_LNOUT_LO1EN_LO1MIX_REG4A, 6, 0,
++	SND_SOC_DAPM_PGA("LNOUTMIX1 PGA", SND_SOC_NOPM, 6, 0,
+ 			 NULL, 0),
+ 	SND_SOC_DAPM_MIXER("ROUT1 Mix", SND_SOC_NOPM, 0, 0,
+ 			   &es8396_rout1_mixer_controls[0],
+ 			   ARRAY_SIZE(es8396_rout1_mixer_controls)),
+-	SND_SOC_DAPM_PGA("RNOUTMIX1 PGA", ES8396_LNOUT_RO1EN_RO1MIX_REG4B, 6, 0,
++	SND_SOC_DAPM_PGA("RNOUTMIX1 PGA", SND_SOC_NOPM, 6, 0,
+ 			 NULL, 0),
+ 
+ 	/*
+@@ -2490,26 +2406,7 @@ static int es8396_set_dai_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
+ 		return -EINVAL;
+ 	}
+ 
+-	switch (id) {
+-	case ES8396_SDP1:
+-		snd_soc_write(codec, ES8396_SDP1_IN_FMT_REG1F, spc);
+-		snd_soc_write(codec, ES8396_SDP1_OUT_FMT_REG20, spc);
+-		snd_soc_write(codec, ES8396_SDP_1_MS_REG12, mmcc);
+-		break;
+-	case ES8396_SDP2:
+-		snd_soc_write(codec, ES8396_SDP2_IN_FMT_REG22, spc);
+-		snd_soc_write(codec, ES8396_SDP2_OUT_FMT_REG23, spc);
+-		snd_soc_write(codec, ES8396_SDP_2_MS_REG13, mmcc);
+-		break;
+-	case ES8396_SDP3:
+-		snd_soc_write(codec, ES8396_SDP3_IN_FMT_REG24, spc);
+-		snd_soc_write(codec, ES8396_SDP3_OUT_FMT_REG25, spc);
+-		snd_soc_write(codec, ES8396_SDP_3_MS_REG14, mmcc);
+-		break;
+-	default:
+-		return -EINVAL;
+-		break;
+-	}
++	snd_soc_write(codec, ES8396_SDP1_IN_FMT_REG1F, 00);
+ 	pr_debug("es8396_set_dai_fmt-->\n");
+ 
+ 	priv->config[id].spc = spc;
+@@ -2588,19 +2485,18 @@ static int es8396_set_bias_level(struct snd_soc_codec *codec,
+ 		 * snd_soc_update_bits(codec, ES8396_DAC_REF_PWR_CTRL_REG6E,
+ 		 * 0xff, 0x00);
+ 		 */
+-		snd_soc_write(codec, 0x40, 0x66);
++		snd_soc_write(codec, 0x4E, 0x80);
++		snd_soc_write(codec, 0x4F, 0x81);
+ 		break;
+ 
+ 	case SND_SOC_BIAS_PREPARE:
+-		if (es8396->aif1_select == 0 && es8396->aif2_select == 0)
+-			snd_soc_write(codec, 0x40, 0x22);
+ 		break;
+ 
+ 	case SND_SOC_BIAS_STANDBY:
+ 		if (es8396->aif1_select == 0 && es8396->aif2_select == 0) {
+ 			if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
+ 				snd_soc_write(codec, ES8396_SYS_VMID_REF_REG71,
+-					      0xEE);
++					      0xFF);
+ 				if (es8396_valid_analdo(es8396->ana_ldo_lvl)) {
+ 					value = es8396->ana_ldo_lvl;
+ 					value &= 0x07;
+@@ -2617,55 +2513,6 @@ static int es8396_set_bias_level(struct snd_soc_codec *codec,
+ 		break;
+ 
+ 	case SND_SOC_BIAS_OFF:
+-		if (es8396->aif1_select == 0 && es8396->aif2_select == 0) {
+-			/* cphp pdn */
+-			snd_soc_update_bits(codec, ES8396_CPHP_ENABLE_REG40,
+-					    0xff, 0x00);
+-			snd_soc_update_bits(codec, ES8396_CPHP_CTRL_1_REG42,
+-					    0xff, 0x20);
+-			snd_soc_update_bits(codec, ES8396_CPHP_CTRL_2_REG43,
+-					    0xff, 0x82);
+-			snd_soc_update_bits(codec, ES8396_CPHP_CTRL_3_REG44,
+-					    0xff, 0x33);
+-			snd_soc_update_bits(codec, ES8396_LNOUT_REFERENCE_REG52,
+-					    0xff, 0xc0);
+-			snd_soc_update_bits(codec, ES8396_MONOHP_REF_LP_REG45,
+-					    0xff, 0xe0);
+-
+-			value = snd_soc_read(codec, ES8396_SPK_EN_VOL_REG3B);
+-			value &= 0x77;
+-			/* clear enspk_l,enspk_r */
+-			snd_soc_write(codec, ES8396_SPK_EN_VOL_REG3B, value);
+-			value = snd_soc_read(codec, ES8396_SPK_CTRL_SRC_REG3A);
+-			/* set pdnspkl_biasgen, set pdnspkr_biasgen */
+-			value |= 0x44;
+-			snd_soc_write(codec, ES8396_SPK_CTRL_SRC_REG3A, value);
+-			value = snd_soc_read(codec, ES8396_SPK_MIXER_REG26);
+-			/* clear pdnspkl_biasgen, clear pdnspkr_biasgen */
+-			value |= 0x11;
+-			snd_soc_write(codec, ES8396_SPK_MIXER_REG26, value);
+-			/* spk pdn */
+-			snd_soc_update_bits(codec, ES8396_SPK_CTRL_1_REG3C,
+-					    0x20, 0x20);
+-			/* dac analog power down */
+-			snd_soc_update_bits(codec,
+-					    ES8396_DAC_REF_PWR_CTRL_REG6E,
+-					    0xff, 0xc0);
+-			/* adc analog power down */
+-			snd_soc_update_bits(codec, ES8396_ADC_ANALOG_CTRL_REG5E,
+-					    0xff, 0x3c);
+-			snd_soc_update_bits(codec, ES8396_SYS_VMID_REF_REG71,
+-					    0xff, 0x92);
+-			snd_soc_update_bits(codec,
+-					    ES8396_SYS_MIC_IBIAS_EN_REG75,
+-					    0xff, 0x01);
+-			snd_soc_update_bits(codec,
+-					    ES8396_SYS_CHIP_ANA_CTL_REG70,
+-					    0xff, 0x53);
+-			/* dac dig reset */
+-			snd_soc_update_bits(codec, ES8396_DAC_CSM_REG66, 0xff,
+-					    0x40);
+-		}
+ 		break;
+ 	}
+ 	codec->dapm.bias_level = level;
+@@ -2699,7 +2546,7 @@ static int es8396_pcm_startup(struct snd_pcm_substream *substream,
+ 	struct es8396_private *es8396 = snd_soc_codec_get_drvdata(tron_codec);
+ 	int ret;
+ 	int regv;
+-
++	int i;
+ 	pr_debug(">>>>>>>>es8396_pcm_startup\n");
+ 	ret = snd_soc_read(tron_codec, ES8396_ADC_CSM_REG53);
+ 	pr_debug("ES8396_ADC_CSM_REG53===0x%x\n", ret);
+@@ -2708,7 +2555,6 @@ static int es8396_pcm_startup(struct snd_pcm_substream *substream,
+ 	 * set divider for music playback
+ 	 * set DAC source from SDP1 in
+ 	 */
+-	snd_soc_write(tron_codec, 0x66, 0x01);
+ 	if ((es8396->aif2_select & 0x01) == 0) {
+ 		pr_debug(">>>>>>>>es8396_pcm_startup, only power on sdp1 for music\n");
+ 		/* if don't have voice requirement */
+@@ -2734,15 +2580,18 @@ static int es8396_pcm_startup(struct snd_pcm_substream *substream,
+ 	if (playback) {
+ 		pr_debug(">>>>>>>>>>>es8396_pcm_startup playback\n");
+ 		es8396->aif1_select |= 0x01;
++		snd_soc_write(tron_codec, 0x66, 0x01);
++		for (i = 0; i < 120; i = i + 2) {
++			snd_soc_write(tron_codec, 0x6A, i + 1);
++			snd_soc_write(tron_codec, 0x6B, i + 1);
++			usleep_range(100, 200);
++		}
+ 		if (es8396->calibrate == 0) {
+ 			pr_debug("Enter into %s  %d\n", __func__, __LINE__);
+-			snd_soc_write(tron_codec, 0x40, 0x00);
+-			snd_soc_write(tron_codec, 0x44, 0x00);
+-			snd_soc_write(tron_codec, 0x41, 0x00);
+-			es8396->pcm_pop_work_retry = 5;
++			es8396->calibrate = true;
+ 		}
+ 		schedule_delayed_work(&es8396->pcm_pop_work,
+-				      msecs_to_jiffies(20));
++				      msecs_to_jiffies(10));
+ 
+ 	} else {
+ 		pr_debug(">>>>>>>>>>>es8396_pcm_startup capture\n");
+@@ -2806,7 +2655,7 @@ static void es8396_pcm_shutdown(struct snd_pcm_substream *substream,
+ 	if (playback) {
+ 		pr_debug(">>>>>>>>es8396_pcm_shutdown, playback\n");
+ 		schedule_delayed_work(&es8396->pcm_shutdown_depop_work,
+-				      msecs_to_jiffies(200));
++				      msecs_to_jiffies(20));
+ 	} else {
+ 		pr_debug(">>>>>>>>es8396_pcm_shutdown, capture\n");
+ 		snd_soc_update_bits(tron_codec, ES8396_SDP1_OUT_FMT_REG20, 0x40,
+@@ -2822,23 +2671,32 @@ static int es8396_voice_startup(struct snd_pcm_substream *substream,
+ 	bool playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
+ 	struct es8396_private *es8396 = snd_soc_codec_get_drvdata(tron_codec);
+ 	int regv;
++	int i;
+ 
+ 	pr_debug("****************es8396_voice_startup\n");
+ 
+ 	if (playback) {
+ 		pr_debug("****************es8396_voice_startup, playback\n");
+ 		es8396->aif2_select |= 0x01;
++		snd_soc_write(tron_codec, 0x4e, 0x84);
++		snd_soc_write(tron_codec, 0x4f, 0x85);
++
++		for (i = 0; i < 120; i = i + 2) {
++			snd_soc_write(tron_codec, 0x6A, i + 1);
++			snd_soc_write(tron_codec, 0x6B, i + 1);
++			usleep_range(100, 200);
++		}
++
+ 		/* mute dac */
+-		snd_soc_write(tron_codec, 0x66, 0x03);
++		snd_soc_write(tron_codec, 0x66, 0x01);
+ 		/* DSP-B, 1st SCLK after LRCK edge, I2S2 SDPIN */
+ 		snd_soc_update_bits(tron_codec, ES8396_SDP2_IN_FMT_REG22,
+ 				    0x7F, 0x13);
+-		snd_soc_write(tron_codec, 0x18, 0x00);	/* set eq source */
++		snd_soc_write(tron_codec, 0x18, 0x51);	/* set eq source */
+ 		snd_soc_write(tron_codec, 0x19, 0x51);	/* set eq source */
+ 		snd_soc_write(tron_codec, 0x8, 0x10);
+ 		snd_soc_write(tron_codec, 0xd, 0x00);
+ 		snd_soc_write(tron_codec, 0x9, 0x04);
+-		snd_soc_write(tron_codec, 0x1A, 0x40);	/* Enable HPOUT */
+ 		if ((es8396->aif1_select & 0x01) == 0) {
+ 			/* if only voice */
+ 			snd_soc_write(tron_codec, 0x67, 0x0c);
+@@ -2860,7 +2718,7 @@ static int es8396_voice_startup(struct snd_pcm_substream *substream,
+ 			      es8396_equalizer_lpf_bt_incall[59]);
+ 
+ 		schedule_delayed_work(&es8396->voice_pop_work,
+-				      msecs_to_jiffies(150));
++				      msecs_to_jiffies(50));
+ 	} else {
+ 		pr_debug("****************es8396_voice_startup, capture\n");
+ 		es8396->aif2_select |= 0x02;
+@@ -2917,10 +2775,10 @@ static void es8396_voice_shutdown(struct snd_pcm_substream *substream,
+ 
+ 	/* DSP-B, 1st SCLK after LRCK edge, I2S2 SDPIN */
+ 	if (playback) {
+-		snd_soc_write(tron_codec, 0x66, 0x03);
++		snd_soc_write(tron_codec, 0x66, 0x01);
+ 		pr_debug("****************es8396_voice_shutdown, playback\n");
+ 		schedule_delayed_work(&es8396->voice_shutdown_depop_work,
+-				      msecs_to_jiffies(200));
++				      msecs_to_jiffies(10));
+ 	} else {
+ 		pr_debug("****************es8396_voice_shutdown, captuer\n");
+ 		/* //DSP-B, 1st SCLK after LRCK edge, I2S2 SDPO */
+@@ -2944,12 +2802,23 @@ static int es8396_aif1_mute(struct snd_soc_dai *codec_dai, int mute)
+ 			pr_debug("spk_ctl_gpio set %d\n", es8396->spk_ctl_gpio);
+ 			gpio_set_value(es8396->spk_ctl_gpio, 0);
+ 		}
++		if (es8396->lineout_ctl_gpio != INVALID_GPIO &&
++		    es8396->aif2_select == 0) {
++			pr_debug("lineout_ctl_gpio set %d\n",
++				 es8396->lineout_ctl_gpio);
++			gpio_set_value(es8396->lineout_ctl_gpio, 0);
++		}
+ 		msleep(100);
+ 	} else {
+ 		if (es8396->spk_ctl_gpio != INVALID_GPIO) {
+ 			pr_debug("spk_ctl_gpio set %d\n", es8396->spk_ctl_gpio);
+ 			gpio_set_value(es8396->spk_ctl_gpio, 1);
+ 		}
++		if (es8396->lineout_ctl_gpio != INVALID_GPIO) {
++			pr_debug("lineout_ctl_gpio set %d\n",
++				 es8396->lineout_ctl_gpio);
++			gpio_set_value(es8396->lineout_ctl_gpio, 1);
++		}
+ 	}
+ 
+ 	return 0;
+@@ -2968,12 +2837,23 @@ static int es8396_aif2_mute(struct snd_soc_dai *codec_dai, int mute)
+ 			pr_debug("spk_ctl_gpio set %d\n", es8396->spk_ctl_gpio);
+ 			gpio_set_value(es8396->spk_ctl_gpio, 0);
+ 		}
++		if (es8396->lineout_ctl_gpio != INVALID_GPIO &&
++		    es8396->aif1_select == 0) {
++			pr_debug("lineout_ctl_gpio set %d\n",
++				 es8396->lineout_ctl_gpio);
++			gpio_set_value(es8396->lineout_ctl_gpio, 0);
++		}
+ 		msleep(100);
+ 	} else {
+ 		if (es8396->spk_ctl_gpio != INVALID_GPIO) {
+ 			pr_debug("spk_ctl_gpio set %d\n", es8396->spk_ctl_gpio);
+ 			gpio_set_value(es8396->spk_ctl_gpio, 1);
+ 		}
++		if (es8396->lineout_ctl_gpio != INVALID_GPIO) {
++			pr_debug("lineout_ctl_gpio set %d\n",
++				 es8396->lineout_ctl_gpio);
++			gpio_set_value(es8396->lineout_ctl_gpio, 1);
++		}
+ 	}
+ 	return 0;
+ }
+@@ -3045,55 +2925,26 @@ static struct snd_soc_dai_driver es8396_dai[] = {
+ 
+ static int es8396_suspend(struct device *dev)
+ {
+-	struct es8396_private *es8396 = snd_soc_codec_get_drvdata(tron_codec);
+-	int i, ret = 0;
+-
+ 	pr_debug("CODEC going into suspend mode\n");
+ 
+-	es8396_set_bias_level(tron_codec, SND_SOC_BIAS_OFF);
++	snd_soc_write(tron_codec, 0x4e, 0x84);
++	snd_soc_write(tron_codec, 0x4f, 0x85);
++	snd_soc_write(tron_codec, 0x66, 0x01);
++	snd_soc_write(tron_codec, 0x6e, 0x00);
+ 
+-	for (i = 0; i < ES8396_SDP3; i++) {
+-		/* if pll be used, power down it */
+-		if (es8396->sysclk[i] == ES8396_CLKID_PLLO) {
+-			ret = 1;
+-			break;
+-		}
+-	}
+-	if (ret)
+-		/* power down PLL */
+-		snd_soc_write(tron_codec, ES8396_PLL_CTRL_1_REG02, 0x80);
+-	/* SET suspend flag */
+-	snd_soc_write(tron_codec, ES8396_TEST_MODE_REG76, 0xAA);
+ 	return 0;
+ }
+ 
+ static int es8396_resume(struct device *dev)
+ {
+-	struct es8396_private *es8396 = snd_soc_codec_get_drvdata(tron_codec);
+-	int i, ret = 0;
+-
+ 	pr_debug("CODEC going into es8396_resume mode\n");
+-	usleep_range(20000, 21000);
+-	for (i = 0; i < ES8396_SDP3; i++) {
+-		/* if pll be used, power up it */
+-		if (es8396->sysclk[i] == ES8396_CLKID_PLLO) {
+-			ret = 1;
+-			break;
+-		}
+-	}
+-	/* pll analog power up */
+-	snd_soc_update_bits(tron_codec, ES8396_PLL_CTRL_1_REG02, 0xff, 0x81);
+-	/* pll digital on */
+-	snd_soc_update_bits(tron_codec, ES8396_PLL_CTRL_1_REG02, 0xff, 0x41);
+ 
+-	es8396_set_bias_level(tron_codec, SND_SOC_BIAS_STANDBY);
+-
+-	ret = snd_soc_read(tron_codec, ES8396_TEST_MODE_REG76);
+-	pr_debug("*****ES8396_TEST_MODE_REG76=0x%x*********\n", ret);
+-	snd_soc_write(tron_codec, ES8396_GPIO_IRQ_REG16, 0xc0);
+ 	usleep_range(20000, 21000);
+-	snd_soc_write(tron_codec, ES8396_GPIO_IRQ_REG16, 0x80);
+-	snd_soc_write(tron_codec, ES8396_TEST_MODE_REG76, 0xA0);
++
++	snd_soc_write(tron_codec, 0x6e, 0x00);
++	snd_soc_write(tron_codec, 0x66, 0x00);
++	snd_soc_write(tron_codec, 0x4e, 0x80);
++	snd_soc_write(tron_codec, 0x4f, 0x81);
+ 	return 0;
+ }
+ 
+@@ -3119,79 +2970,148 @@ static int es8396_probe(struct snd_soc_codec *codec)
+ 	}
+ 	tron_codec = codec;
+ 	regv = snd_soc_read(codec, ES8396_PLL_K2_REG05);
++
+ 	if (regv == 0x00) {
+-		snd_soc_write(codec, 0x40, 0x00);
+-		snd_soc_write(codec, ES8396_DAC_SRC_SDP1O_SRC_REG1A, 0x30);
+-	} else {
+-		snd_soc_write(codec, 0x40, 0x00);
+-		snd_soc_write(codec, ES8396_DAC_SRC_SDP1O_SRC_REG1A, 0x30);
+-	}
+-	/*
+-	 * setup system analog control
+-	 */
+-	snd_soc_write(codec, ES8396_SYS_VMID_REF_REG71, 0x9E);
++		/*
++		 * setup system analog control
++		 */
++		snd_soc_write(codec, ES8396_DLL_CTRL_REG0D, 0x20);
++		snd_soc_write(codec, ES8396_CLK_SRC_SEL_REG01, 0x04);
++		snd_soc_write(codec, ES8396_PLL_CTRL_1_REG02, 0xc1);
++		snd_soc_write(codec, ES8396_PLL_CTRL_2_REG03, 0x00);
++		snd_soc_write(codec, ES8396_PLL_N_REG04, 0x08);
++		snd_soc_write(codec, ES8396_PLL_K2_REG05, 0X1d);
++		snd_soc_write(codec, ES8396_PLL_K1_REG06, 0Xc3);
++		snd_soc_write(codec, ES8396_PLL_K0_REG07, 0Xb8);
++		snd_soc_write(codec, ES8396_PLL_CTRL_1_REG02, 0x41);
++
++		/* adc,dac,cphp,class d clk enable,from clk2 */
++		snd_soc_write(codec, ES8396_CLK_CTRL_REG08, 0x00);
++		/* adc clk ratio=1 */
++		snd_soc_write(codec, ES8396_ADC_CLK_DIV_REG09, 0x04);
++		/* dac clk ratio=1 */
++		snd_soc_write(codec, ES8396_DAC_CLK_DIV_REG0A, 0x01);
++		snd_soc_write(codec, ES8396_BCLK_DIV_M2_REG0F, 0x24);
++		snd_soc_write(codec, ES8396_LRCK_DIV_M4_REG11, 0x22);
++
++		msleep(50);
++		snd_soc_write(codec, ES8396_SYS_VMID_REF_REG71, 0xFC);
++		snd_soc_write(codec, 0x72, 0xFF);
++		snd_soc_write(codec, 0x73, 0xFF);
++		if (es8396_valid_analdo(es8396->ana_ldo_lvl) == false) {
++			pr_err("Analog LDO Level error.\n");
++			return -EINVAL;
++		} else {
++			value = es8396->ana_ldo_lvl;
++			value &= 0x07;
++			snd_soc_write(codec, ES8396_SYS_CHIP_ANA_CTL_REG70,
++				      value);
++		}
++		/* mic enable, mic d2se enable */
++		snd_soc_write(codec, ES8396_SYS_MIC_IBIAS_EN_REG75, 0x01);
++		msleep(50);
++		snd_soc_write(codec, ES8396_TEST_MODE_REG76, 0xA0);
++		snd_soc_write(codec, ES8396_NGTH_REG7A, 0x20);
++		msleep(50);
++
++		/* power up adc and dac analog */
++		snd_soc_write(codec, ES8396_ADC_ANALOG_CTRL_REG5E, 0x00);
++		snd_soc_write(codec, ES8396_DAC_REF_PWR_CTRL_REG6E, 0x00);
++		/* set L,R DAC volume */
++		snd_soc_write(codec, ES8396_DAC_LDAC_VOL_REG6A, 0x01);
++		snd_soc_write(codec, ES8396_DAC_RDAC_VOL_REG6B, 0x01);
++		/* setup charge current for calibrate */
++		snd_soc_write(codec, ES8396_ADC_LADC_VOL_REG56, 0x84);
++		snd_soc_write(codec, ES8396_ADC_RADC_VOL_REG57, 0xdc);
++		snd_soc_write(codec, ES8396_DAC_OFFSET_CALI_REG6F, 0x06);
++		snd_soc_write(codec, ES8396_DAC_RAMP_RATE_REG67, 0x00);
++		/* enable adc and dac stm for calibrate */
++		snd_soc_write(codec, ES8396_DAC_CSM_REG66, 0x00);
++		snd_soc_write(codec, ES8396_ADC_CSM_REG53, 0x00);
++		snd_soc_write(codec, ES8396_ADC_FORCE_REG77, 0x40);
++		snd_soc_write(codec, ES8396_ADC_FORCE_REG77, 0x00);
++		snd_soc_write(codec, ES8396_DLL_CTRL_REG0D, 0x00);
++		msleep(100);
++		snd_soc_write(codec, ES8396_DAC_CSM_REG66, 0x00);
++		snd_soc_write(codec, ES8396_ADC_ANALOG_CTRL_REG5E, 0x00);
++		snd_soc_write(codec, 0x5f, 0xf2);
++		snd_soc_write(tron_codec, 0x1f, 0x00);
++		snd_soc_write(tron_codec, 0x20, 0x40);
++		/* FM */
++		msleep(100);
++		snd_soc_write(tron_codec, 0x65, 0x88);
++		snd_soc_write(tron_codec, 0x2E, 0x88);
++		snd_soc_write(tron_codec, 0x2F, 0x00);
++		snd_soc_write(tron_codec, 0x30, 0xBB);
+ 
+-	if (es8396_valid_analdo(es8396->ana_ldo_lvl) == false) {
+-		pr_err("Analog LDO Level error.\n");
+-		return -EINVAL;
+-	} else {
+-		value = es8396->ana_ldo_lvl;
+-		value &= 0x07;
+-		value |= 0x10;
+-		snd_soc_write(codec, ES8396_SYS_CHIP_ANA_CTL_REG70, value);
++		if (es8396_valid_micbias(es8396->mic_bias_lvl) == false) {
++			pr_err("MIC BIAS Level error.\n");
++			return -EINVAL;
++		} else {
++			value = es8396->mic_bias_lvl;
++			value &= 0x07;
++			value = (value << 4) | 0x08;
++			/* enable micbias1 */
++			snd_soc_write(codec, ES8396_SYS_MICBIAS_CTRL_REG74,
++				      value);
++		}
++
++		snd_soc_write(codec, ES8396_ADC_CSM_REG53, 0x20);
++		snd_soc_write(codec, ES8396_ADC_PGA_GAIN_REG61, 0x33);
++		snd_soc_write(codec, ES8396_ADC_MICBOOST_REG60, 0x22);
++		if (es8396->dmic_amic == MIC_AMIC)
++			/*use analog mic */
++			snd_soc_write(codec, ES8396_ADC_DMIC_RAMPRATE_REG54,
++				      0x00);
++		else
++			/*use digital mic */
++			snd_soc_write(codec, ES8396_ADC_DMIC_RAMPRATE_REG54,
++				      0xf0);
++
++		/*Enable HPF, LDATA= LADC, RDATA = LADC */
++		snd_soc_write(codec, ES8396_ADC_HPF_COMP_DASEL_REG55, 0x31);
++
++		/*
++		 * setup hp detection
++		 */
++
++		/* gpio 2 for irq, AINL as irq src, gpio1 for dmic clk */
++		snd_soc_write(codec, ES8396_ALRCK_GPIO_SEL_REG15, 0xfa);
++		snd_soc_write(codec, ES8396_DAC_JACK_DET_COMP_REG69, 0x00);
++		if (es8396->jackdet_enable == 1) {
++			/* jack detection from AINL pin, AINL=0, HP Insert */
++			snd_soc_write(codec, ES8396_DAC_JACK_DET_COMP_REG69,
++				      0x04);
++			if (es8396->gpio_int_pol == 0)
++				/* if HP insert, GPIO2=Low */
++				snd_soc_write(codec, ES8396_GPIO_IRQ_REG16,
++					      0x80);
++			else
++				/* if HP insert, GPIO2=High */
++				snd_soc_write(codec, ES8396_GPIO_IRQ_REG16,
++					      0xc0);
++		} else {
++			snd_soc_write(codec, ES8396_GPIO_IRQ_REG16, 0x00);
++		}
++
++		/*
++		 * setup mono in in differential mode or stereo mode
++		 */
++
++		/* monoin in differential mode */
++		if (es8396->monoin_differential == 1)
++			snd_soc_update_bits(codec, ES8396_MN_MIXER_REF_LP_REG39,
++					    0x08, 0x08);
++		else
++			snd_soc_update_bits(codec, ES8396_MN_MIXER_REF_LP_REG39,
++					    0x08, 0x00);
++
++		snd_soc_write(codec, ES8396_DAC_JACK_DET_COMP_REG69, 0x00);
++		snd_soc_write(codec, ES8396_BCLK_DIV_M1_REG0E, 0x24);
++		snd_soc_write(codec, ES8396_LRCK_DIV_M3_REG10, 0x22);
++		snd_soc_write(codec, ES8396_SDP_2_MS_REG13, 0x00);
++		codec->dapm.bias_level = SND_SOC_BIAS_STANDBY;
+ 	}
+-	/* mic enable, mic d2se enable */
+-	snd_soc_write(codec, ES8396_SYS_MIC_IBIAS_EN_REG75, 0x01);
+-	msleep(50);
+-	snd_soc_write(codec, ES8396_DLL_CTRL_REG0D, 0x20);
+-	snd_soc_write(codec, ES8396_CLK_SRC_SEL_REG01, 0x04);
+-	snd_soc_write(codec, ES8396_PLL_CTRL_1_REG02, 0xc1);
+-	snd_soc_write(codec, ES8396_PLL_CTRL_2_REG03, 0x00);
+-	snd_soc_write(codec, ES8396_PLL_N_REG04, 0x08);
+-	snd_soc_write(codec, ES8396_PLL_K2_REG05, 0X1d);
+-	snd_soc_write(codec, ES8396_PLL_K1_REG06, 0Xc3);
+-	snd_soc_write(codec, ES8396_PLL_K0_REG07, 0Xb8);
+-	snd_soc_write(codec, ES8396_PLL_CTRL_1_REG02, 0x41);
+-
+-	/* adc,dac,cphp,class d clk enable,from clk2 */
+-	snd_soc_write(codec, ES8396_CLK_CTRL_REG08, 0x0F);
+-	/* adc clk ratio=1 */
+-	snd_soc_write(codec, ES8396_ADC_CLK_DIV_REG09, 0x04);
+-	/* dac clk ratio=1 */
+-	snd_soc_write(codec, ES8396_DAC_CLK_DIV_REG0A, 0x01);
+-	snd_soc_write(codec, ES8396_BCLK_DIV_M2_REG0F, 0x24);
+-	snd_soc_write(codec, ES8396_LRCK_DIV_M4_REG11, 0x22);
+-
+-	snd_soc_write(codec, ES8396_TEST_MODE_REG76, 0xA0);
+-	snd_soc_write(codec, ES8396_NGTH_REG7A, 0x20);
+-	msleep(30);
+-	snd_soc_write(codec, ES8396_SPK_EN_VOL_REG3B, 0x11);
+-	/* set hp out for calibration */
+-	snd_soc_write(codec, ES8396_CPHP_ICAL_VOL_REG41, 0x00);
+-	snd_soc_write(codec, ES8396_CPHP_CTRL_1_REG42, 0x09);
+-	snd_soc_write(codec, ES8396_CPHP_CTRL_2_REG43, 0x59);
+-	snd_soc_write(codec, ES8396_CPHP_CTRL_3_REG44, 0x30);
+-	/* setup hp mixer */
+-	snd_soc_write(codec, ES8396_HP_MIXER_REG2A, 0x88);
+-	snd_soc_write(codec, ES8396_HP_MIXER_BOOST_REG2B, 0x00);
+-	snd_soc_write(codec, ES8396_HP_MIXER_VOL_REG2C, 0xBB);
+-	/* power up adc and dac analog */
+-	snd_soc_write(codec, ES8396_ADC_ANALOG_CTRL_REG5E, 0x00);
+-	snd_soc_write(codec, ES8396_DAC_REF_PWR_CTRL_REG6E, 0x00);
+-	/* set L,R DAC volume */
+-	snd_soc_write(codec, ES8396_DAC_LDAC_VOL_REG6A, 0x01);
+-	snd_soc_write(codec, ES8396_DAC_RDAC_VOL_REG6B, 0x01);
+-	/* setup charge current for calibrate */
+-	snd_soc_write(codec, ES8396_ADC_LADC_VOL_REG56, 0x84);
+-	snd_soc_write(codec, ES8396_ADC_RADC_VOL_REG57, 0xdc);
+-	snd_soc_write(codec, ES8396_DAC_OFFSET_CALI_REG6F, 0x06);
+-	snd_soc_write(codec, ES8396_DAC_RAMP_RATE_REG67, 0x05);
+-	/* enable adc and dac stm for calibrate */
+-	snd_soc_write(codec, ES8396_DAC_CSM_REG66, 0x04);
+-	snd_soc_write(codec, ES8396_ADC_CSM_REG53, 0x00);
+-	snd_soc_write(codec, ES8396_ADC_FORCE_REG77, 0x40);
+-	snd_soc_write(codec, ES8396_ADC_FORCE_REG77, 0x00);
+-	snd_soc_write(codec, ES8396_DLL_CTRL_REG0D, 0x00);
+ 
+ 	INIT_DELAYED_WORK(&es8396->adc_depop_work, adc_depop_work_events);
+ 	mutex_init(&es8396->adc_depop_mlock);
+@@ -3212,7 +3132,13 @@ static int es8396_probe(struct snd_soc_codec *codec)
+ 			  voice_shutdown_depop_events);
+ 	mutex_init(&es8396->voice_shutdown_depop_mlock);
+ 
+-	schedule_delayed_work(&es8396->init_cali_work, msecs_to_jiffies(50));
++	snd_soc_write(codec, 0x6f, 0x83);
++	snd_soc_write(codec, ES8396_SYS_VMID_REF_REG71, 0xFC);
++	msleep(100);
++	snd_soc_write(codec, 0x4E, 0x84);
++	snd_soc_write(codec, 0x4F, 0x85);
++	snd_soc_write(codec, 0x4A, 0x60);
++	snd_soc_write(codec, 0x4B, 0x60);
+ 	/*
+ 	 * TODO: pop noise occur when HS calibration during probe
+ 	 * increase the delay of a period of time if necessary
+@@ -3224,7 +3150,14 @@ static int es8396_probe(struct snd_soc_codec *codec)
+ static int es8396_remove(struct snd_soc_codec *codec)
+ {
+ 	pr_debug("!!!!!!CODEC going into es8396_remove!!!!!!\n");
+-	es8396_set_bias_level(codec, SND_SOC_BIAS_OFF);
++
++	snd_soc_write(codec, 0X4E, 0x84);
++	snd_soc_write(codec, 0X4F, 0x85);
++	snd_soc_write(codec, 0X4A, 0x80);
++	snd_soc_write(codec, 0X4B, 0x80);
++	snd_soc_write(codec, 0x70, 0xd4);
++	msleep(300);
++
+ 	return 0;
+ }
+ 
+@@ -3259,14 +3192,14 @@ static int init_es8396_prv(struct es8396_private *es8396)
+ 	es8396->earpiece = true;
+ 	es8396->monoin_differential = true;
+ 	es8396->lno_differential = 0;
+-	es8396->ana_ldo_lvl = ANA_LDO_3V;
++	es8396->ana_ldo_lvl = ANA_LDO_2_1V;
+ 	es8396->spk_ldo_lvl = SPK_LDO_3V;
+ 	es8396->mic_bias_lvl = MICBIAS_3V;
+ 	es8396->jackdet_enable = true;
+ 	es8396->gpio_int_pol = 0;
+ 	es8396->dmic_amic = MIC_AMIC;
+ 	es8396->calibrate = false;
+-	es8396->pcm_pop_work_retry = 5;
++	es8396->pcm_pop_work_retry = 1;
+ 	es8396->output_device_selected = 0;
+ 	es8396->aif1_select = 0;
+ 	es8396->aif2_select = 0;
+@@ -3301,6 +3234,7 @@ static int es8396_i2c_probe(struct i2c_client *i2c_client,
+ 	/* initialize codec */
+ 	i2c_set_clientdata(i2c_client, es8396);
+ 
++	/* external speaker amp controller */
+ 	es8396->spk_ctl_gpio = of_get_named_gpio_flags(np,
+ 						       "spk-con-gpio", 0,
+ 						       &flags);
+@@ -3323,6 +3257,31 @@ static int es8396_i2c_probe(struct i2c_client *i2c_client,
+ 		}
+ 	}
+ 
++	/* lineout output  controller*/
++	es8396->lineout_ctl_gpio = of_get_named_gpio_flags(np,
++							   "lineout-con-gpio",
++							   0, &flags);
++	if (es8396->lineout_ctl_gpio < 0) {
++		pr_err("%s() Can not read property lineout en-gpio\n",
++		       __func__);
++		es8396->lineout_ctl_gpio = INVALID_GPIO;
++	} else {
++		pr_debug("%d() lineout en-gpio\n", es8396->lineout_ctl_gpio);
++		es8396->lineout_gpio_level = (flags & OF_GPIO_ACTIVE_LOW) ?
++					      0 : 1;
++		ret = devm_gpio_request(&i2c_client->dev,
++					es8396->lineout_ctl_gpio,
++					"lineout_ctl");
++		if (!ret) {
++			pr_debug("requset lineout en-gpio success!:%d\n", ret);
++			gpio_direction_output(es8396->lineout_ctl_gpio,
++					      !es8396->lineout_gpio_level);
++		} else {
++			pr_err("requset lineout en-gpio failed:%d\n", ret);
++			return ret;
++		}
++	}
++
+ 	ret = snd_soc_register_codec(&i2c_client->dev,
+ 				     &soc_codec_dev_es8396, es8396_dai,
+ 				     ARRAY_SIZE(es8396_dai));
+@@ -3333,11 +3292,18 @@ static int es8396_i2c_probe(struct i2c_client *i2c_client,
+ static void es8396_i2c_shutdown(struct i2c_client *client)
+ {
+ 	struct es8396_private *es8396 = i2c_get_clientdata(client);
++	pr_debug("Enter into %s\n", __func__);
+ 
+ 	if (es8396->spk_ctl_gpio != INVALID_GPIO)
+ 		gpio_set_value(es8396->spk_ctl_gpio, 0);
++
+ 	usleep_range(20000, 21000);
+-	es8396_set_bias_level(tron_codec, SND_SOC_BIAS_OFF);
++	snd_soc_write(tron_codec, 0X4E, 0x84);
++	snd_soc_write(tron_codec, 0X4F, 0x85);
++	snd_soc_write(tron_codec, 0X4a, 0x80);
++	snd_soc_write(tron_codec, 0X4b, 0x80);
++	snd_soc_write(tron_codec, 0x70, 0xd4);
++	msleep(300);
+ }
+ 
+ static int es8396_i2c_remove(struct i2c_client *client)
+-- 
+1.9.1
+
