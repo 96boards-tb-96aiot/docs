@@ -1,0 +1,151 @@
+From d011b6601a0110a48f31d3318a622ab204bc4dbd Mon Sep 17 00:00:00 2001
+From: WangJianhui <wjh@rock-chips.com>
+Date: Mon, 10 Jul 2017 16:55:37 +0800
+Subject: [PATCH] px3se: dts: fix wifi on RK_SDK_MAIN_PX3SE_CAR_V11
+
+V11 use RTL8723DS chip
+
+Change-Id: I1a62631d7133340959a6ae008556701c4b803b9e
+Signed-off-by: WangJianhui <wjh@rock-chips.com>
+---
+ arch/arm/boot/dts/px3se-emmc-minifs-sdk.dts        | 3 ++-
+ arch/arm/boot/dts/px3se-sdk.dts                    | 3 ++-
+ arch/arm/boot/dts/px3se-sfc-sdk.dts                | 3 ++-
+ arch/arm/boot/dts/px3se-slc-sdk.dts                | 3 ++-
+ arch/arm/configs/px3se_linux_defconfig             | 2 +-
+ arch/arm/configs/px3se_linux_emmc_minifs_defconfig | 2 +-
+ arch/arm/configs/px3se_linux_sfc_defconfig         | 2 +-
+ arch/arm/configs/px3se_linux_slc_defconfig         | 2 +-
+ 8 files changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/arch/arm/boot/dts/px3se-emmc-minifs-sdk.dts b/arch/arm/boot/dts/px3se-emmc-minifs-sdk.dts
+index 2c8019f..59a4a29 100644
+--- a/arch/arm/boot/dts/px3se-emmc-minifs-sdk.dts
++++ b/arch/arm/boot/dts/px3se-emmc-minifs-sdk.dts
+@@ -114,12 +114,13 @@
+ 	wireless-wlan {
+ 		compatible = "wlan-platdata";
+ 
+-		wifi_chip_type = "rtl8723cs";
++		wifi_chip_type = "rtl8723ds";
+ 		sdio_vref = <1800>; /*1800mv or 3300mv*/
+ 		/* WIFI_HOST_WAKE = GPIO3_C7 */
+ 		WIFI,host_wake_irq = <&gpio3 GPIO_C7 GPIO_ACTIVE_HIGH>;
+ 		/* WIFI_REG_ON  = GPIO3_D3 */
+ 		WIFI,poweren_gpio  = <&gpio3 GPIO_D3 GPIO_ACTIVE_HIGH>;
++		WIFI,vbat_gpio  = <&gpio1 GPIO_A3 GPIO_ACTIVE_HIGH>;
+ 
+ 		status = "okay";
+ 	};
+diff --git a/arch/arm/boot/dts/px3se-sdk.dts b/arch/arm/boot/dts/px3se-sdk.dts
+index 61a5798..a322838 100644
+--- a/arch/arm/boot/dts/px3se-sdk.dts
++++ b/arch/arm/boot/dts/px3se-sdk.dts
+@@ -84,12 +84,13 @@
+ 	wireless-wlan {
+ 		compatible = "wlan-platdata";
+ 
+-		wifi_chip_type = "rtl8723cs";
++		wifi_chip_type = "rtl8723ds";
+ 		sdio_vref = <1800>; /*1800mv or 3300mv*/
+ 		/* WIFI_HOST_WAKE = GPIO3_C7 */
+ 		WIFI,host_wake_irq = <&gpio3 GPIO_C7 GPIO_ACTIVE_HIGH>;
+ 		/* WIFI_REG_ON  = GPIO3_D3 */
+ 		WIFI,poweren_gpio  = <&gpio3 GPIO_D3 GPIO_ACTIVE_HIGH>;
++		WIFI,vbat_gpio  = <&gpio1 GPIO_A3 GPIO_ACTIVE_HIGH>;
+ 
+ 		status = "okay";
+ 	};
+diff --git a/arch/arm/boot/dts/px3se-sfc-sdk.dts b/arch/arm/boot/dts/px3se-sfc-sdk.dts
+index 90c645e..b218619 100644
+--- a/arch/arm/boot/dts/px3se-sfc-sdk.dts
++++ b/arch/arm/boot/dts/px3se-sfc-sdk.dts
+@@ -123,12 +123,13 @@
+ 	wireless-wlan {
+ 		compatible = "wlan-platdata";
+ 
+-		wifi_chip_type = "rtl8723cs";
++		wifi_chip_type = "rtl8723ds";
+ 		sdio_vref = <1800>; /*1800mv or 3300mv*/
+ 		/* WIFI_HOST_WAKE = GPIO3_C7 */
+ 		WIFI,host_wake_irq = <&gpio3 GPIO_C7 GPIO_ACTIVE_HIGH>;
+ 		/* WIFI_REG_ON  = GPIO3_D3 */
+ 		WIFI,poweren_gpio  = <&gpio3 GPIO_D3 GPIO_ACTIVE_HIGH>;
++		WIFI,vbat_gpio  = <&gpio1 GPIO_A3 GPIO_ACTIVE_HIGH>;
+ 
+ 		status = "okay";
+ 	};
+diff --git a/arch/arm/boot/dts/px3se-slc-sdk.dts b/arch/arm/boot/dts/px3se-slc-sdk.dts
+index 57fe123..a1b8f9e 100644
+--- a/arch/arm/boot/dts/px3se-slc-sdk.dts
++++ b/arch/arm/boot/dts/px3se-slc-sdk.dts
+@@ -123,12 +123,13 @@
+ 	wireless-wlan {
+ 		compatible = "wlan-platdata";
+ 
+-		wifi_chip_type = "rtl8723cs";
++		wifi_chip_type = "rtl8723ds";
+ 		sdio_vref = <1800>; /*1800mv or 3300mv*/
+ 		/* WIFI_HOST_WAKE = GPIO3_C7 */
+ 		WIFI,host_wake_irq = <&gpio3 GPIO_C7 GPIO_ACTIVE_HIGH>;
+ 		/* WIFI_REG_ON  = GPIO3_D3 */
+ 		WIFI,poweren_gpio  = <&gpio3 GPIO_D3 GPIO_ACTIVE_HIGH>;
++		WIFI,vbat_gpio  = <&gpio1 GPIO_A3 GPIO_ACTIVE_HIGH>;
+ 
+ 		status = "okay";
+ 	};
+diff --git a/arch/arm/configs/px3se_linux_defconfig b/arch/arm/configs/px3se_linux_defconfig
+index d086558..5004d04 100644
+--- a/arch/arm/configs/px3se_linux_defconfig
++++ b/arch/arm/configs/px3se_linux_defconfig
+@@ -303,7 +303,7 @@ CONFIG_USB_HSO=y
+ CONFIG_USB_NET_INT51X1=y
+ CONFIG_USB_IPHETH=y
+ CONFIG_USB_SIERRA_NET=y
+-CONFIG_RTL8723CS=y
++CONFIG_RTL8723DS=y
+ CONFIG_ESP8089=y
+ CONFIG_RKWIFI=y
+ CONFIG_AP6335=y
+diff --git a/arch/arm/configs/px3se_linux_emmc_minifs_defconfig b/arch/arm/configs/px3se_linux_emmc_minifs_defconfig
+index bc66e16..7ff63b0 100644
+--- a/arch/arm/configs/px3se_linux_emmc_minifs_defconfig
++++ b/arch/arm/configs/px3se_linux_emmc_minifs_defconfig
+@@ -118,7 +118,7 @@ CONFIG_NETDEVICES=y
+ # CONFIG_NET_VENDOR_WIZNET is not set
+ CONFIG_RK_VMAC_ETH=y
+ CONFIG_RK_GMAC_ETH=y
+-CONFIG_RTL8189FS=y
++CONFIG_RTL8723DS=y
+ # CONFIG_SSV6051_P2P is not set
+ # CONFIG_SSV6051_SDIO is not set
+ # CONFIG_INPUT_MOUSEDEV is not set
+diff --git a/arch/arm/configs/px3se_linux_sfc_defconfig b/arch/arm/configs/px3se_linux_sfc_defconfig
+index ffa8c61..a276ae6 100644
+--- a/arch/arm/configs/px3se_linux_sfc_defconfig
++++ b/arch/arm/configs/px3se_linux_sfc_defconfig
+@@ -120,7 +120,7 @@ CONFIG_NETDEVICES=y
+ # CONFIG_NET_VENDOR_WIZNET is not set
+ CONFIG_RK_VMAC_ETH=y
+ CONFIG_RK_GMAC_ETH=y
+-CONFIG_RTL8189FS=y
++CONFIG_RTL8723DS=y
+ # CONFIG_SSV6051_P2P is not set
+ # CONFIG_SSV6051_SDIO is not set
+ # CONFIG_INPUT_MOUSEDEV is not set
+diff --git a/arch/arm/configs/px3se_linux_slc_defconfig b/arch/arm/configs/px3se_linux_slc_defconfig
+index 3fafbbf..07b5824 100644
+--- a/arch/arm/configs/px3se_linux_slc_defconfig
++++ b/arch/arm/configs/px3se_linux_slc_defconfig
+@@ -116,7 +116,7 @@ CONFIG_NETDEVICES=y
+ # CONFIG_NET_VENDOR_WIZNET is not set
+ CONFIG_RK_VMAC_ETH=y
+ CONFIG_RK_GMAC_ETH=y
+-CONFIG_RTL8189FS=y
++CONFIG_RTL8723DS=y
+ # CONFIG_SSV6051_P2P is not set
+ # CONFIG_SSV6051_SDIO is not set
+ # CONFIG_INPUT_MOUSEDEV is not set
+-- 
+1.9.1
+
