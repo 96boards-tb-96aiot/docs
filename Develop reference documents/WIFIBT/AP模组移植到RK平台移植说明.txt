@@ -1,0 +1,36 @@
+移植说明：
+建议先阅读《Rockchip Linux WIFI BT 开发指南 V6.0.pdf》中的1.4	WiFiBT的文件及其编译说明章节
+下面以AP6236为例
+
+1、buildroot修改：
+首先打开如下文件：
+buildroot/package/rockchip/rkwifibt/Config.in
+添加：根据对应的模组命名
+config BR2_PACKAGE_RKWIFIBT_AP6236	// AP6236
+    bool "AP6236"
+	
+然后打开：
+buildroot/package/rockchip/rkwifibt/rkwifibt.mk 
+添加：
+ifeq ($(BR2_PACKAGE_RKWIFIBT_AP6236),y)
+CHIP_VENDOR = BROADCOM
+CHIP_NAME = AP6236			// 名字要和上面的一致
+BT_FIRMWARE = BCM4343B0.hcd // 这里填写对应模组的蓝牙firmware的名字，即模组厂提供的BCMXXXX.hcd文件
+endif
+
+2、external/rkwifibt修改：
+在external\rkwifibt\firmware\broadcom 这个目录创建对应模组的目录，名字一定要和上面一致：
+比如AP6236:
+mkdir external\rkwifibt\firmware\broadcom\AP6236
+mkdir external\rkwifibt\firmware\broadcom\AP6236\wifi
+mkdir external\rkwifibt\firmware\broadcom\AP6236\bt
+
+然后把模组厂提供的文件放入到对应的目录：
+把firmware bin、nvram放入到：external\rkwifibt\firmware\broadcom\AP6236\wifi
+把BCM4xxx.hcd放入到: external\rkwifibt\firmware\broadcom\AP6236\bt
+
+3、内核的wifi驱动所以ap模组公用一套，无需特殊修改，即选择CONFIG_AP6XXX
+
+4、在buildroot中选中对应模组，make savedefconfig && make rkwifibt-rebuild && ./build.sh
+
+5、如果移植中遇到问题，请提供你修改过的文件和步骤，以及执行make rkwifibt-rebuild的log输出，通过redmine提问题发出来

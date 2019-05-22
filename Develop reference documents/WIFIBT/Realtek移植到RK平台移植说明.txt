@@ -1,0 +1,238 @@
+REALTEK RK平台移植说明：
+下面以RTL8821CS为例
+
+首先拿到原厂给的包：20171225_RTL8821CS_WiFi_linux_v5.2.18_25830_BT_ANDROID_UART_COEX_8821CS-B1d1d_COEX20170908-1f1f
+
+1）移植WiFi，进到如下目录：
+WiFi\RTL8821CS_WiFi_linux_v5.2.18_25830_COEX20170908-1f1f.20171225\driver
+修改Makefile：
+改为RK平台：
+CONFIG_PLATFORM_I386_PC = n
+CONFIG_PLATFORM_ARM_RK3188 = y
+
+如果有WiFi唤醒需求：
+CONFIG_WOWLAN = y
+CONFIG_GPIO_WAKEUP = y
+
+
+RK平台需要去掉以下配置：
+ifeq ($(CONFIG_PLATFORM_ARM_RK3188), y)
+EXTRA_CFLAGS += -DRTW_SUPPORT_PLATFORM_SHUTDOWN //删掉这个配置
+
+
+2）修改源码：
+如果有WiFi唤醒需求，修改platform\platform_ops.c
++#include <linux/rfkill-wlan.h>
++extern unsigned int oob_irq;
+int platform_wifi_power_on(void)
+{
+	int ret = 0;
+
++	oob_irq = rockchip_wifi_get_oob_irq();  //这里对应dts的WIFI_WAKE_HOSTPIN脚
+
+	return ret;
+}
+
+void platform_wifi_power_off(void)
+{
+}
+#endif /* !CONFIG_PLATFORM_OPS */
+
+修改驱动加载入口：
+os_dep\linux\sdio_intf.c
+在该文件的最后加上如下代码：
+#include "rtw_version.h"
+#include <linux/rfkill-wlan.h>
+extern int get_wifi_chip_type(void);
+extern int rockchip_wifi_power(int on);
+extern int rockchip_wifi_set_carddetect(int val);
+
+int rockchip_wifi_init_module_rtkwifi(void)
+{
+#ifdef CONFIG_WIFI_LOAD_DRIVER_WHEN_KERNEL_BOOTUP
+    int type = get_wifi_chip_type();
+    if (type < WIFI_AP6XXX_SERIES || type == WIFI_ESP8089) return 0;
+#endif
+    printk("\n");
+    printk("=======================================================\n");
+    printk("==== Launching Wi-Fi driver! (Powered by Rockchip) ====\n");
+    printk("=======================================================\n");
+    printk("Realtek 8723DS SDIO WiFi driver (Powered by Rockchip,Ver %s) init.\n", DRIVERVERSION);
+
+    rockchip_wifi_power(1);
+    rockchip_wifi_set_carddetect(1);    
+
+    return rtw_drv_entry();
+}
+
+void rockchip_wifi_exit_module_rtkwifi(void)
+{
+#ifdef CONFIG_WIFI_LOAD_DRIVER_WHEN_KERNEL_BOOTUP
+    int type = get_wifi_chip_type();
+    if (type < WIFI_AP6XXX_SERIES || type == WIFI_ESP8089) return;
+#endif
+    printk("\n");
+    printk("=======================================================\n");
+    printk("==== Dislaunching Wi-Fi driver! (Powered by Rockchip) ====\n");
+    printk("=======================================================\n");
+    printk("Realtek 8723DS SDIO WiFi driver (Powered by Rockchip,Ver %s) init.\n", DRIVERVERSION);
+
+    rtw_drv_halt();
+
+    rockchip_wifi_set_carddetect(0);
+    rockchip_wifi_power(0);
+}
+
+#ifdef CONFIG_WIFI_BUILD_MODULE
+module_init(rockchip_wifi_init_module_rtkwifi);
+module_exit(rockchip_wifi_exit_module_rtkwifi);
+#else
+#ifdef CONFIG_WIFI_LOAD_DRIVER_WHEN_KERNEL_BOOTUP
+late_initcall(rockchip_wifi_init_module_rtkwifi);
+module_exit(rockchip_wifi_exit_module_rtkwifi);
+#else
+EXPORT_SYMBOL(rockchip_wifi_init_module_rtkwifi);
+EXPORT_SYMBOL(rockchip_wifi_exit_module_rtkwifi);
+#endif
+#endif
+
+//这里屏蔽掉下面，注意把下面两个函数的入口__init __exit 删掉
+//module_init(rtw_drv_entry);
+//module_exit(rtw_drv_halt);
+
+修改rtl8723ds\os_dep\linux\rtw_android.c
+去掉如下代码：
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39)) || defined(COMPAT_KERNEL_RELEASE)
+void *wifi_get_country_code(char *ccode)
+{
+	RTW_INFO("%s\n", __FUNCTION__);
+	if (!ccode)
+		return NULL;
+//	if (wifi_control_data && wifi_control_data->get_country_code)
+//		return wifi_control_data->get_country_code(ccode);
+	return NULL;
+}
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39)) */
+
+
+修改menuconfig 配置（如果有就不要加了）
+drivers/net/wireless/rockchip_wlan/Makefile
++ obj-$(CONFIG_RTL8821CS) += rtl8821cs/
+
+drivers/net/wireless/rockchip_wlan/Kconfig
++ source "drivers/net/wireless/rockchip_wlan/rtl8821cs/Kconfig"
+
+修改代码格式问题：此问题是由于realtek代码不规范，我们可以根据上下文手动加上或者咨询驱动提供者让他们确认
+比如这个驱动如下代码：
+#if (DM_ODM_SUPPORT_TYPE & (ODM_WIN | ODM_CE))
+boolean
+phydm_la_buffer_allocate(
+        void                    *p_dm_void
+)
+{
+        struct PHY_DM_STRUCT            *p_dm = (struct PHY_DM_STRUCT *)p_dm_void;
+        struct _RT_ADCSMP               *adc_smp = &(p_dm->adcsmp);
+#if (DM_ODM_SUPPORT_TYPE & ODM_WIN)
+        struct _ADAPTER         *adapter = p_dm->adapter;
+#endif
+        struct _RT_ADCSMP_STRING        *adc_smp_buf = &(adc_smp->adc_smp_buf);
+        boolean ret = false;
+
+        dbg_print("[LA mode BufferAllocate]\n");
+
+        if (adc_smp_buf->length == 0) {
+
+#if (DM_ODM_SUPPORT_TYPE & ODM_WIN)
+                if (PlatformAllocateMemoryWithZero(adapter, (void **)&(adc_smp_buf->octet), adc_smp_buf->buffer_size) != RT_STATUS_SUCCESS) {
+#else
+                odm_allocate_memory(p_dm, (void **)&adc_smp_buf->octet, adc_smp_buf->buffer_size);
+                if (!adc_smp_buf->octet)        {
+#endif
+                        ret = false;
+                } else
+                        adc_smp_buf->length = adc_smp_buf->buffer_size; //这里else没有加{}，导致歧义，编译报错
+                        ret = true;
+        }
+
+        return ret;
+}
+#endif
+
+第二处：
+void phydm_get_iqk_cfir(
+        void *p_dm_void,
+        u8 idx,
+        u8 path,
+        boolean debug
+)
+{
+        struct PHY_DM_STRUCT    *p_dm = (struct PHY_DM_STRUCT *)p_dm_void;
+        struct _IQK_INFORMATION *p_iqk_info = &p_dm->IQK_info;
+
+        u8 i, ch;
+        u32 tmp;
+
+        if (debug)
+                ch = 2;
+        else
+                ch = 0;  //这里加上{}
+
+                odm_set_bb_reg(p_dm, 0x1b00, MASKDWORD, 0xf8000008 | path << 1);
+                if (idx == 0)
+                        odm_set_bb_reg(p_dm, 0x1b0c, BIT(13) | BIT(12), 0x3);
+                else
+                        odm_set_bb_reg(p_dm, 0x1b0c, BIT(13) | BIT(12), 0x1);
+                odm_set_bb_reg(p_dm, 0x1bd4, BIT(20) | BIT(19) | BIT(18) | BIT(17) | BIT(16), 0x10);
+                for (i = 0; i < 8; i++) {
+                        odm_set_bb_reg(p_dm, 0x1bd8, MASKDWORD, 0xe0000001 + (i * 4));
+                        tmp = odm_get_bb_reg(p_dm, 0x1bfc, MASKDWORD);
+                        p_iqk_info->IQK_CFIR_real[ch][path][idx][i] = (tmp & 0x0fff0000) >> 16;
+                        p_iqk_info->IQK_CFIR_imag[ch][path][idx][i] = tmp & 0xfff;
+                }
+        odm_set_bb_reg(p_dm, 0x1bd8, MASKDWORD, 0x0);
+        odm_set_bb_reg(p_dm, 0x1b0c, BIT(13) | BIT(12), 0x0);
+}
+
+第三处：
+drivers/net/wireless/rockchip_wlan/rtl8821cs/hal/phydm/halrf/rtl8821c/halrf_iqk_8821c.c +2260
+                if (txgap_changed >0x0){
+                        ODM_RT_TRACE(p_dm, ODM_COMP_CALIBRATION, ODM_DBG_TRACE,
+                        ("[TXGAPK] do 3dB check \n"));
+
+
+                for (i=0; i<txgapK_number-1-skip_low_power_index; i++){
+                        tmp1 = (txgain[i] & 0x000000e0)>>5;
+                        tmp2 = (txgain[i+1] & 0x000000e0)>>5;
+
+                        if (tmp1 != tmp2){
+
+                                if(i==0)  //这里加上{}
+                                        tmp3 = _txgapk_one_shot_8821c(p_dm, RF_PATH_A, txgain[i]-2);
+                                else
+                                        tmp3 = _txgapk_one_shot_8821c(p_dm, RF_PATH_A, txgain[i]);
+
+                                        tmp4 = _txgapk_one_shot_8821c(p_dm, RF_PATH_A, txgain[i+1]);
+
+第四处：
+drivers/net/wireless/rockchip_wlan/rtl8821cs/hal/phydm/halrf/rtl8821c/halrf_iqk_8821c.c +2518
+
+        if (gainloss_back <= 0xa) 
+                gainloss_back = 0xa - gainloss_back;
+				//这里歧义
+		
+                if (gainloss_back > pa_scan_pw + 0x8)
+                        odm_set_rf_reg(p_dm, path, 0x8f, BIT(14) | BIT(13), 0x11);
+                else if ( (pa_scan_pw + 0x8 - gainloss_back)>= 0x6 )
+                        odm_set_rf_reg(p_dm, path, 0x8f, BIT(14) | BIT(13), 0x00);
+                else /*if (0x6 >= (pa_scan_pw + 0x8 - gainloss_back)> 0x0 )*/
+                        odm_set_rf_reg(p_dm, path, 0x8f, BIT(14) | BIT(13), 0x01);
+
+        ODM_RT_TRACE(p_dm, ODM_COMP_CALIBRATION, ODM_DBG_LOUD,
+        ("[IQK] reg_1bfc =0x%x, pa_scan_pw =0x%x, gainloss_back = 0x%x, pa_scan_i = 0x%x, pa_scan_q = 0x%x, RF0x8f = 0x%x, !!!\n",
+        reg_1bfc, pa_scan_pw,gainloss_back,pa_scan_i,pa_scan_q,
+        odm_get_rf_reg(p_dm, path , 0x8f, RFREGOFFSETMASK)));
+		
+不一一列举，非常多，建议找驱动提供者确认
+
+
+最后把驱动文件夹命名为：rtl8821cs放到kernel\drivers\net\wireless\rockchip_wlan目录

@@ -1,0 +1,27 @@
+性能测试：
+由于2.4G在开放环境干扰非常大，请在屏蔽环境下测试：首先确保wifi可以正常连接
+iperf吞吐测试：
+
+主要测试吞吐率的大小，以及稳定性、是否有上下波动等等；路由器信道要选择低、中、高信道分别进行测试， 比如1/6/11信道：
+连上WiFi，并把ifconfig p2p0 down //如果有p2p0节点的话请关掉
+
+下行：
+	板子端：iperf -s -i 1
+	电脑：iperf -c xxxxxxx(板子的ip地址) -i 1 -w 2M -t 120
+
+上行：
+	电脑：iperf -s -i 1
+	板子端：iperf -c xxxxxxx(电脑的ip地址) -i 1 -w 2M -t 120
+	
+注意：板子的iperf命令要在buildroot端进行配置：BR2_PACKAGE_IPERF = y
+
+
+
+参考：
+SDIO 2.0 + 2.4G模组参考：
+上行： 45Mbps左右
+下行： 50Mbps左右
+
+SDIO 3.0 + 5G模组参考：
+上行： 150Mbps左右
+下行： 200Mbps左右

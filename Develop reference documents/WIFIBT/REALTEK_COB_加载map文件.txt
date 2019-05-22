@@ -1,0 +1,46 @@
+Realtek Map 校准文件的加载
+KO 方式： 为了方便调试，可以改为 ko 方式加载 map 文件，下面以 8723DS 为例，其他类似：
+（1）、更改内核配置：
+CONFIG_RTL8723DS=m
+修改你们认为放便调试目录：
++EXTRA_CFLAGS += -DEFUSE_MAP_PATH=\"/data/wifi_efuse_8723ds.map\"
++++ b/drivers/net/wireless/rockchip_wlan/rtl8723ds/Makefile
+@@ -797,7 +797,7 @@ EXTRA_CFLAGS += -DEFUSE_MAP_PATH=\"$(USER_EFUSE_MAP_PATH)\"
+else ifeq ($(MODULE_NAME), 8189es)
+EXTRA_CFLAGS += -DEFUSE_MAP_PATH=\"/system/etc/wifi/wifi_efuse_8189e.map\"
+else ifeq ($(MODULE_NAME), 8723ds)
+-EXTRA_CFLAGS += -DEFUSE_MAP_PATH=\"/vendor/etc/firmware/wifi_efuse_8723ds.map\"
++EXTRA_CFLAGS += -DEFUSE_MAP_PATH=\"/data/wifi_efuse_8723ds.map\"
+else
+EXTRA_CFLAGS +=
+-DEFUSE_MAP_PATH=\"/system/etc/wifi/wifi_efuse_$(MODULE_NAME).map\"
+重新编译生成 ko
+drivers/net/wireless/rockchip_wlan/rtl8723ds/8723ds.ko
+更新内核
+（2）、放入必要文件
+把 wifi_efuse_8723ds.map 文件 push 到上面修改的目录： +EXTRA_CFLAGS +=
+-DEFUSE_MAP_PATH=\"/data/wifi_efuse_8723ds.map\"
+把 8723ds.ko push 到 data 或者其他认为方便的目录
+adb push wifi_efuse_8723ds.map /data/
+adb push 8723ds.ko /data
+（3）、开机后执行：
+insmod /data/8723ds.ko //注意一定要跟你上面 push 的目录一致
+log 中显示：
+[ 29.002020] RTW: efuse file:/oem/wifi_efuse_8723ds.map, 0x200 byte content read
+[ 29.002065] RTW: EFUSE FILE
+[ 29.002098] RTW: 0x000: 29 81 00 7C 01 88 07 00 A0 04 EC 35 12 C0 A3 D8
+[ 29.002289] RTW: 0x010: 28 28 28 28 28 28 28 28 28 28 28 02 FF FF FF FF
+[ 29.002477] RTW: 0x020: FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+Buildin 方式：
+有时为了加快开机联网速度，希望采用 buildin，则可以通过如下方式实现：
+drivers/net/wireless/rockchip_wlan/rtl8189fs/core/efuse/rtw_efuse.c
+找到该 rtw_read_efuse_from_file 函数：
+{
+... ...
+map = rtw_vmalloc(map_size); //申请内存
+for (i = 0 ; i < map_size ; i++) {
+... ... //解析 map 文件里面的内容，赋值为 map 指针
+}
+DBG_871X_LEVEL(_drv_always_,"efuse file:%s, 0x%03xbyte content read\n",path,i);
+//一种方法：先用 ko 的方式加载，在这里把 map 指针的内容打印出来，然后把内容做成数组，直接赋值给 map 即可，就省掉解析动作了；另一种方法：直接把模组厂提供的校准map文件改成数组，赋值给map即可。
+_rtw_memcpy(buf, map, map_size); //这里是最终的赋值操作。

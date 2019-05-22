@@ -1,0 +1,20 @@
+WIFI RF测试：
+1、把这个文件替换到fw_bcm43436b0_mfg.bin 放到到 external/rkwifibt/firmware/broadcom/AP6236/wifi/这个目录，
+   然后把fw_bcm43436b0_mfg.bin 覆盖 fw_bcm43436b0.bin这个文件，注意正式固件要改回去。
+2、
+   make rkwifibt-dirclean
+   make rkwifibt-rebuild 
+   ./build.sh 重新打包；
+3、启动后使用wl ver命令，log会有输出 WL TEST字样，表示可以测试了, 如果没有出现，则表示firmware没有替换成功；
+4、具体的测试参考Wi-Fi RF Test Commands for Linux-v03.pdf，如果客户没有专业测试仪器或者有测试疑问，请直接找模组厂协助；
+
+BT RF测试：
+1、执行bt_pcba_test脚本（SDK自带脚本）
+	hciconfig hci0 up
+	hciconfig -a
+   如果有出现hci0节点就表示初始化完成，如果没有出现有两种可能：
+	a、蓝牙dts配置异常或硬件异常或者uart口配置错误,导致初始化失败; 
+	b、蓝牙firmware文件配置错误或者没有该文件；
+   请参考WiFiBT开发指南进行排查；
+
+2、测试请参考BT RF Test Commands for Linux-v05.pdf（测试1/2步都在脚本里面执行过了）
