@@ -1,0 +1,238 @@
+===========RK3399PRO Linux SDK Release Note===========
+【rk3399pro_linux_release_v1.1.0_20190706.xml Release Note】
+1. update kernel
+(1) fix host mode resume fail for rk3399/rk33999pro
+(2) put the edp/mipi in vopl, and hdmi in vopb.
+(3) fixes irq of BT on rk3399pro evb
+(4) Fixes the regulator the abnormal during suspend.
+
+2. update uboot
+(1) update vopl init correct
+(2) fixes avb
+
+3. update debian
+(1) fixes vp8 encode was abnormal on debian.
+
+4. update docs
+(1) add the Rockchip Linux Software_Developer_Guide_CN and
+    Rockchip_Linux_Software_Developer_Guide_EN.pdf
+(2) update RK3399PRO_Release_Note.txt
+    * dos2unix fixes the file format on ubuntu.
+    * change the language from Chinese to English.
+
+【rk3399pro_linux_release_v1.0.1_20190621.xml Release Note】
+1. update device/rockchip
+(1) support to run './build.sh debian' for debian9 and run
+    './build.sh distro' for debian10.
+(2) Fix broken cleanall with './build.sh cleanall'.
+
+2. update RK3399PRO_Release_Note.txt
+(1) dos2unix fixes the file format on ubuntu.
+(2) change the language from Chinese to English.
+
+3. update kernel
+(1) support headphone jack.
+(2) support NTFS filesystem.
+
+4. update debian
+(1) support usb3.0 for adbd.
+(2) support rk809 switch configure.
+(3) fixes the online video crash on chromium.
+(4) support the camera 3a function on debian.
+
+【rk3399pro_linux_release_v1.0.0_20190606.xml 更新日志】
+
+一 NPU的更新:
+(1) Updates npu driver to version 6.3.3.2, rknn server 0.9.7
+(2) rknn-api: update to v0.9.6
+(3) npu_transfer to 1.9.2
+(4) RKNN Toolkit to 1.0.0
+(5) 增加新的仓库external/RKNPUtool,里面包含rknn api Linu/Android SDK
+更新记录：
+a. rknn c/c++ api 、npu_transfer 支持多计算棒
+   1) rknn api接口有更新，对于单计算棒或者原有rk3399pro，api接口不变
+   2) 对于多计算棒，增加rknn_init2()函数
+b. rk1808支持 Android NNAPI 1.1 (for Linux)，编程接口与Android一致
+c. rk3399pro支持Android NNAPI 1.1（for NPU）
+d. 解决rk3399pro3个以上模型同时跑时，可能存在卡住的问题
+e. 解决驱动中存在的一些内存泄露
+f. rknn server支持将 non precompile的模型转换成precompile模型（需要和rknn
+toolkit 1.1配合))
+
+
+二 Buildroot更新：
+1. usb3.0 adbd的支持
+2. uvc_app的支持
+3. rockchip_test添加camera等测试的完善
+4. freerdp的支持
+
+三 Debian更新:
+1. npp_fw和rknn_demo的更新
+2. 修复日期无法修改问题
+3. 修复低概率系统第一次起来被损坏问题
+4. debian10 buster版本编译添加
+5. 电源按键对待机唤醒的处理
+
+四 文档和工具的更新:
+1. AndroidTool更新到v2.67
+2. DriverAssitantg更新到v4.8
+3. FactoryTool更新到v1.66
+4. add rk3399pro RKNN_API document
+5. wifi/bt相关文档的更新
+6. recovery and pcba document更新
+7. 添加 DRM Display Develop文档
+8. uboot、camera文档的更新
+
+五 Camera更新:
+librkisp: v2.0.0
+
+    3A lib version:
+       af:  v0.2.14
+       awb: v0.0.b
+       aec: v0.0.9
+
+    iq version: v1.0.0
+    iq magic version code: 635075
+
+    matched rkisp1 driver version:v0.1.3
+主要更新点：
+
+1）iq文件加入严格校验机制，防止乱改iq文件及改错等原因造成的与engine库不匹配的问题
+2）iq效果与hal00做了一致性验证
+3）本次发布的iq文件，经过iq效果验证的会在iq文件中加 verify 标识
+4）af效果有提升，连续对焦及触摸对焦，速度及准确度都有提升
+
+六 kernel的更新:
+1. 修复lpddr4的一些bugs和专门的lpddr4 dts的支持
+
+七 uboot/rkbin的更新:
+1. rknpu-lion: bl31: update version to v1.05
+
+    Build from ATF commit:
+        301942b plat: rk1808: fix pmic_sleep pin config
+    update features:
+        301942b plat: rk1808: fix pmic_sleep pin config
+        549d145 plat: rk1808: ddr: fix rx de-skew switch bug
+        c0933ee rockchip: common: atags: sync from u-boot
+
+2. rk3399pro: bl31: update version to 1.28
+
+    Build from ATF commit:
+        51f2096 plat: rk3399: ddr: fix lpddr4 some timing error
+    update feature:
+        this bl31 is match ddr bin Version "DDR Version 1.22 20190506"
+
+3. rk3399pro: ddr: update ddr version to v1.22 20190506
+
+    build from:
+        8132b62 Version: DDR Version 1.22 20190506
+    update feature:
+        ce4c893 lpddr4: fix lpddr4 some timing error
+
+八 App的修复
+1. settings: fixup softap connection failure
+    https://redmine.rockchip.com.cn/issues/192401
+2. camera:
+   camera: match the new isp driver
+    There are 5 node on /dev/video* by one isp.c
+   camera: fixup ui status confusion sometimes when mode switch
+    https://redmine.rockchip.com.cn/issues/192550
+3. gallery:
+        fix update longPressedFlag return from QPushButton::mouseReleaseEvent
+    https://redmine.rockchip.com.cn/issues/192549#change-1840929
+        add /tmp for file search
+    https://redmine.rockchip.com.cn/issues/192504
+4. music:
+    popup the messagebox instead of Qt::Dialog
+    https://redmine.rockchip.com.cn/issues/192388
+    add /tmp for file search
+    https://redmine.rockchip.com.cn/issues/192504
+5. video:
+    main: support the .m4v format video
+    This patches fixes issues on
+    https://redmine.rockchip.com.cn/issues/191171
+    add /tmp for file search
+    https://redmine.rockchip.com.cn/issues/192504
+
+
+【rk3399pro_linux_beta_v0.02_20190321.xml 更新日志】
+buildroot:
+    * npu_fw （版本升级: rknn 0.9.4, ddr v1.20, bl31: v1.04）
+    * fixes dual panel with hdmi display is abnormal.
+    * 优化Glmark2
+    * 默认双屏同显的支持
+    * 修复wifi密码无法保存问题，蓝牙音箱无法链接问题
+    * 增加gstreamer1.一些音视频格式的支持，比如Mpeg2/Dvd
+
+Debian:
+    * npu_fw 升级到0.9.4
+    * libmali&&qt的升级
+    * 修复ffmpeg的bug
+    * 优化Glmark2
+
+Camera:
+camera_engine_rkisp 和 gst-plugins-rockchip的更新，更新rkisp到v1.9版本
+librkisp.so:      v1.9.0
+librkisp_aec.so:  v0.0.9
+librkisp_awb.so:  v0.0.9
+librkisp_af.so:	  v0.2.10
+iq xml:           v0.2.5
+Camera HAL3:      v1.9.0
+rkisp1 driver:    v0.1.1
+版本主要更新点如下:
+1）修复以下重要 bug：
+	×初始化ISP参数未在数据流输出前设置导致的 死机， 采不到数据等问题
+	×拍照拷机，拍照按钮变灰，预览正常
+2) AE平滑收敛
+3）ISPv12(rk3326) 特性全功能支持
+4）自动匹配 iq 文件
+5）支持 sensor OTP
+6）支持自定义 metadata
+
+Loader:
+rk3399pro:npuloader: Add hash for rk atags
+rk3399pro: npu: ddr: update to v1.02 20190312
+
+Kernel:
+    kernel升级较多部分，同步内部最新20190321.
+   主要修复hdmi无声音问题。BT异常中断等
+
+
+【rk3399pro_linux_beta_v0.01_20190217.xml 更新日志】
+buildroot:
+    * 增加npu-powerctrl源码
+    * npu_fw的升级
+    * rknn_demo添加
+    * usb camera bug的修复
+    * 修复wifi settings，密码框退出问题
+    * gcc升级到6.5版本
+    * 修复rk3399pro待机唤醒问题
+
+uboot/docs/kernel/mpp 升级至内部最新code.
+
+【rk3399pro_linux_beta_v0.01_20190124.xml 更新日志】
+    Working and tested (to some extent):
+        * cluster cpu/gpu support -- including frequency, performance
+        * UART / console
+        * Thermal
+        * Touchscreen
+        * EDP
+        * Wifi
+        * Bluetooth / Webcam
+        * eMMC
+        * USB2/USB3
+        * Backlight
+        * DVFS: included cpu/gpu/ddr
+        * CAMERA: had tested the ov13850 camera
+        * VIDEO: tested the h264 video source
+        * AUDIO: play and mic music
+        * NPU
+        * HDMI
+        * GMAC
+    Not tested:
+        * Pcie
+        * MIPI
+    Not working:
+        * SD CARD: no sure, maybe the board sd card is broken by hardware.
+
+

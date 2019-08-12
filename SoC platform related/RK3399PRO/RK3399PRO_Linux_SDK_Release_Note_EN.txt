@@ -1,0 +1,231 @@
+===========RK3399PRO Linux SDK Release Note===========
+¡¾rk3399pro_linux_release_v1.1.0_20190706.xml Release Note¡¿
+1. update kernel
+(1) fix host mode resume fail for rk3399/rk33999pro
+(2) put the edp/mipi in vopl, and hdmi in vopb.
+(3) fixes irq of BT on rk3399pro evb
+(4) Fixes the regulator the abnormal during suspend.
+
+2. update uboot
+(1) update vopl init correct
+(2) fixes avb
+
+3. update debian
+(1) fixes vp8 encode was abnormal on debian.
+
+4. update docs
+(1) add the Rockchip Linux Software_Developer_Guide_CN and
+    Rockchip_Linux_Software_Developer_Guide_EN.pdf
+(2) update RK3399PRO_Release_Note.txt
+    * dos2unix fixes the file format on ubuntu.
+    * change the language from Chinese to English.
+
+¡¾rk3399pro_linux_release_v1.0.1_20190621.xml Release Note¡¿
+1. update device/rockchip
+(1) support to run './build.sh debian' for debian9 and run
+    './build.sh distro' for debian10.
+(2) Fix broken cleanall with './build.sh cleanall'.
+
+2. update RK3399PRO_Release_Note.txt
+(1) dos2unix fixes the file format on ubuntu.
+(2) change the language from Chinese to English.
+
+3. update kernel
+(1) support headphone jack.
+(2) support NTFS filesystem.
+
+4. update debian
+(1) support usb3.0 for adbd.
+(2) support rk809 switch configure.
+(3) fixes the online video crash on chromium.
+(4) support the camera 3a function on debian.
+
+¡¾rk3399pro_linux_release_v1.0.0_20190606.xml change Log¡¿
+
+1, NPU update:
+(1)Updates npu driver to version 6.3.3.2, rknn server 0.9.7
+(2)rknn-api: update to v0.9.6
+(3)npu_transfer to 1.9.2
+(4)RKNN Toolkit to 1.0.0
+(5)Add the new repository ¡°external/RKNPUtool¡± including rknn api Linu/Android SDK
+
+Detailed update information£º
+(1)rknn c/c++ api , npu_transfer, support multi compute sticks
+   a)The rknn api interface has been update, but for the single compute stick or the original rk3399pro, the api interface has no changes.
+   b)Add rknn_init2() function to multi compute sticks.
+(2)rk1808 support Android NNAPI 1.1 (for Linux), program interface is the same as Android.
+(3)rk3399pro support Android NNAPI 1.1£¨for NPU£©
+(4)Fix the issue that it may stop when there are more than 3 models are running simultaneously on the rk3399pro platform.
+(5)Fix some memory leaks issue in the driver.
+(6)The rknn server supports converting non precompile models into precompile models (requires work with rknn Toolkit 1.1)
+
+2, Buildroot update£º
+(1)Support usb3.0 adbd
+(2)Support uvc_app
+(3)Improve rockchip_test and add camera and other tests
+(4)Support freerdp
+
+3, Debian update:
+(1)Update npp_fw and rknn_demo
+(2)Fix the issue that date cannot be changed 
+(3)Fix the issue that the system appears to be damaged for the first time with low probability
+(4)Add the build version debian10 buster
+(5)Update suspend and resume operation controlled by power button.
+
+4, Document and tools update:
+(1)AndroidTool update to v2.67
+(2)DriverAssitantg update to v4.8
+(3)FactoryTool update to v1.66
+(4)Add rk3399pro RKNN_API document
+(5)wifi/bt related documents update
+(6)recovery and pcba documents update
+(7)Add DRM Display Develop document
+(8)uboot and camera documents update
+
+5, Camera update:
+librkisp: v2.0.0
+3A lib version:
+       af:  v0.2.14
+       awb: v0.0.b
+       aec: v0.0.9
+
+iq version: v1.0.0
+iq magic version code: 635075
+matched rkisp1 driver version: v0.1.3
+
+Main update point£º
+(1)Add a strict verification mechanism in the iq file to prevent the engine library mismatch caused by changing iq file at will or incorrect changing or other reasons.
+(2)The iq effect and hal00 consistency verification
+(3)If the iq file which is released this time is verified by the iq effect, the verify flag is added to the iq file.
+(4)The af effect is improved, continuous focus and touch focus, speed and accuracy are improved
+
+6, kernel update:
+(1) Fix some bugs of lpddr4, and some lpddr4 dts support
+
+7, uboot/rkbin update:
+(1)rknpu-lion: bl31: update version to v1.05
+    Build from ATF commit:
+        301942b plat: rk1808: fix pmic_sleep pin config
+    update features:
+        301942b plat: rk1808: fix pmic_sleep pin config
+        549d145 plat: rk1808: ddr: fix rx de-skew switch bug
+        c0933ee rockchip: common: atags: sync from u-boot
+
+(2)rk3399pro: bl31: update version to 1.28
+
+    Build from ATF commit:
+        51f2096 plat: rk3399: ddr: fix lpddr4 some timing error
+    update feature:
+        this bl31 is match ddr bin Version "DDR Version 1.22 20190506"
+
+(3)rk3399pro: ddr: update ddr version to v1.22 20190506
+
+    build from:
+        8132b62 Version: DDR Version 1.22 20190506
+    update feature:
+        ce4c893 lpddr4: fix lpddr4 some timing error
+
+8, Fix some App issues:
+(1)settings: fixup softap connection failure
+    https://redmine.rockchip.com.cn/issues/192401
+(2)camera:
+   camera: match the new isp driver
+    There are 5 node on /dev/video* by one isp.c
+   camera: fixup ui status confusion sometimes when mode switch
+    https://redmine.rockchip.com.cn/issues/192550
+(3)gallery:
+        fix update longPressedFlag return from QPushButton::mouseReleaseEvent
+    https://redmine.rockchip.com.cn/issues/192549#change-1840929
+        add /tmp for file search
+    https://redmine.rockchip.com.cn/issues/192504
+(4)music:
+    popup the messagebox instead of Qt::Dialog
+    https://redmine.rockchip.com.cn/issues/192388
+    add /tmp for file search
+    https://redmine.rockchip.com.cn/issues/192504
+(5)video:
+    main: support the .m4v format video
+    This patches fixes issues on
+    https://redmine.rockchip.com.cn/issues/191171
+    add /tmp for file search
+    https://redmine.rockchip.com.cn/issues/192504
+
+
+¡¾rk3399pro_linux_beta_v0.02_20190321.xml change log¡¿
+buildroot:
+    * npu_fw (version update to: rknn 0.9.4, ddr v1.20, bl31: v1.04)
+    * fix dual panel with hdmi display is abnormal.
+    * Optimize Glmark2
+    * Support dual pannel with the same display by default
+    * Fix the issue that wifi password cannot be saved and bluetooth speakers can not link 
+* Added some gstreamer1 audio and video formats support, such as Mpeg2/Dvd
+Debian:
+    * npu_fw upgrade to 0.9.4
+    * libmali&&qt upgrade
+    * Fix the ffmpeg bug
+    * Optimize Glmark2
+
+Camera:
+camera_engine_rkisp and gst-plugins-rockchip update, upgrade rkisp to v1.9 version
+librkisp.so:      v1.9.0
+librkisp_aec.so:  v0.0.9
+librkisp_awb.so:  v0.0.9
+librkisp_af.so:	  v0.2.10
+iq xml:           v0.2.5
+Camera HAL3:      v1.9.0
+rkisp1 driver:    v0.1.1
+Main update point of this version£º
+1) Fix the following important bugs:
+¡ÁThe crash and capture no data, etc. caused by do not Initialize ISP parameters before the data stream is output.
+¡ÁThe photo button turn gray but preview is normal when doing photo burn-in test.
+2) AE smooth convergence
+3) Support all ISPv12 (rk3326) features
+4) Automatically match iq files
+5) Support sensor OTP
+6) Support customize metadata
+Loader:
+rk3399pro:npuloader: Add hash for rk atags
+rk3399pro: npu: ddr: update to v1.02 20190312
+
+Kernel:
+Upgrade most parts of kernel, synchronize to the latest internal 20190321.
+Mainly fix hdmi no sound problem, BT abnormal interruption, etc.
+
+¡¾rk3399pro_linux_beta_v0.01_20190217.xml  update log¡¿
+buildroot:
+    * add npu-powerctrl source code
+    * upgrade npu_fw 
+    * add rknn_demo 
+    * Fix usb camera bug 
+* Fix the issue that password window exit when setting wifi
+* gcc upgrade to 6.5 version
+    *Fix rk3399pro suspend and resume issue
+
+uboot/docs/kernel/mpp upgrade to internal latest code.
+
+¡¾rk3399pro_linux_beta_v0.01_20190124.xml change log¡¿
+Working and tested (to some extent):
+        * cluster cpu/gpu support -- including frequency, performance
+        * UART / console
+        * Thermal
+        * Touchscreen
+        * EDP
+        * Wifi
+        * Bluetooth / Webcam
+        * eMMC
+        * USB2/USB3
+        * Backlight
+        * DVFS: included cpu/gpu/ddr
+        * CAMERA: had tested the ov13850 camera
+        * VIDEO: tested the h264 video source
+        * AUDIO: play and mic music
+        * NPU
+        * HDMI
+        * GMAC
+    Not tested:
+        * Pcie
+        * MIPI
+    Not working:
+        * SD CARD: no sure, maybe the board sd card is broken by hardware.
+
+
