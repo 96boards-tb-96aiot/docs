@@ -1,4 +1,19 @@
 ===========RK3399PRO Linux SDK Release Note===========
+rk3399pro_linux_release_v1.1.3_20191023.xml Release Note:
+
+ NPU:
+    - Support RKNPU_FW_N4 for pcie on rk3399pro evb v13 board
+
+ Buildroot (2018.02-rc3):
+    - Support ntfs filesystem for linux
+    - Support controlling output's display rectangle for weston
+
+ Kernel (4.4):
+    - Put the dp in vopb for rk3399pro evb
+
+ Yocto (thud 2.6.2):
+    - add video hardware acceleration for chromium
+
 rk3399pro_linux_release_v1.1.2_20191014.xml Release Note:
 
  NPU:
