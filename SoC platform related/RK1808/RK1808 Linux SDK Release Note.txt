@@ -115,3 +115,23 @@ Rknpu 更新：
    Rkbin更新：
 1.支持secureboot
 2. 解决某些ddr4颗粒不稳定的问题
+
+
+rk1808_linux_release_v1.1.1_20191030.xml更新日志]
+
+Rknpu 更新：
+1. update galcore.ko
+        galcore.ko (6.4.0, 5c7e2cbd)
+    
+        rk1808 base on kernel commit id:
+          577aa02a6d309d0697db079c673baf0b815f5d53
+        rk3399pro/rk3399pro pcie base on kernel commit id:
+          4200e0faeec43d4ea70ccd9b3233aca06c68252a
+        rk1808 for fedora base on kernel commit id:
+          4866d0a0d773f9fe50ae9ed147bdc70f910594dd
+2. update rknn_server to 1.2.0 (57b1656)
+3. update librknn_runtime to 1.2.0 (d6402c5)
+4. New features:
+   1) Add flag RKNN_FLAG_LOAD_MODEL_IN_NPU, you can load model which stored under NPU
+   2) Support rknn model which contain custom OP (rknn toolkit >= 1.2.0)
+5. rknn-toolkitL update to v1.2.1
