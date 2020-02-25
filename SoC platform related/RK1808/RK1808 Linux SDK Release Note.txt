@@ -197,3 +197,35 @@ Buildroot更新：
  
 Camera engine rkisp更新：
 1. 支持区域曝光功能
+
+[rk1808_linux_release_v1.1.4_20200224.xml更新日志]
+
+Kernel更新：
+1. PS5268和HM2056默认设置为镜像模式
+2. 增加rk1806-thunder-boot.dts支持
+
+Uboot更新：
+1. 增加SPL启动kernel的功能
+
+Rknpu更新：
+1. 增加裁剪版npu driver的支持，该driver只支持预编译模型  
+2. 增加BR2_PACKAGE_RKNPU_NOT_RUN_RKNN_SERVER的配置，可选择不启动rknn_server,加快npu加载速度
+
+Buildroot更新：
+1. 增加RK1808/RK1806快速开机的配置
+2. 支持人脸检测应用
+3. 支持骨骼应用
+
+闸机应用更新：
+1. 增加单独显示红外摄像头图像或者RGB摄像头图像功能
+2. 解决camera帧率低问题
+3. camera使用镜像模式
+
+Rockface更新:
+1. 改进活体检测效果
+
+Rockx更新：
+1. 支持32位系统
+ 
+Camera engine rkisp更新：
+1. 支持xml使用bin的形式加载，加快isp初始化速度
