@@ -229,3 +229,33 @@ Rockx更新：
  
 Camera engine rkisp更新：
 1. 支持xml使用bin的形式加载，加快isp初始化速度
+
+[rk1808_linux_release_v1.1.5_20200320.xml更新日志]
+
+Kernel更新：
+1. 更改npu 频率电压表，提高NPU 800M下的电压
+2. 更改PS5268 默认寄存器值，改善PS5268图像效果
+
+Buildroot更新：
+1. 更改RK1806 BoardConfig_ficial_gate.mk配置，uboot默认编译配置更改为RK1806
+2. RK1806 ficial_gate 默认使能nginx webserver配置
+
+Camera engine rkisp更新：
+1.更改PS5268默认xml配置，改善PS5268图像效果
+2.增加获取默认曝光权重值接口及图像平均亮度接口
+
+闸机应用更新：
+1. 增加人脸跟踪功能
+2. 更改人脸识别阈值，改善识别效果
+3. 更改摄像头图像显示流程，提高预览帧率
+4. 重置区域曝光默认权重值从camera xml获取
+
+Posebody应用更新：
+1. 增加USB camera支持
+2. 增加硬件MJPEG解码支持
+
+doc文档更新：
+1. 更新Rockchip_RK1806_Developer_Guide_Linux_Ficial_Gate_CN.pdf
+2，更新Rockchip_RK1808_Developer_Guide_Linux_Docker_CN.pdf
+
+
